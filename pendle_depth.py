@@ -92,6 +92,7 @@ def fetch_swap_quote(
     token_out: str,
     amount_in_wei: int,
     receiver: str,
+    enable_aggregator: bool,
     timeout: float,
     soft: bool = False,
 ) -> dict[str, Any] | None:
@@ -151,8 +152,10 @@ def build_depth_curve(
     for size_pt in sizes_pt:
         amount_in_wei = int(round(size_pt * (10 ** pt_decimals)))
         data = fetch_swap_quote(
-            base_url, chain_id, market, pt_address, out_token,
-            amount_in_wei, receiver, enable_aggregator, timeout, soft=True,
+            base_url=base_url, chain_id=chain_id, market=market,
+            token_in=pt_address, token_out=out_token,
+            amount_in_wei=amount_in_wei, receiver=receiver,
+            enable_aggregator=enable_aggregator, timeout=timeout, soft=True,
         ) or {}
         block = data.get("data") or {}
         amount_out_wei = block.get("amountOut")
