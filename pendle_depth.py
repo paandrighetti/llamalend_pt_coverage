@@ -5,9 +5,9 @@ WHY AN API AND NOT A HAND-ROLLED AMM
 ------------------------------------
 Pendle's AMM math (a Notional-style logit curve scaled by time-to-maturity) is
 non-trivial and battle-tested. Re-implementing it blindly is a correctness risk.
-Instead we treat Pendle as the source of truth: we ask it for a swap quote at a
+Instead we treat Pendle as the quoting authority: we ask it for a swap quote at a
 grid of sell sizes and read the resulting price impact. This yields the true
-on-venue depth curve with zero AMM-math risk. (A fully trustless alternative is
+on-venue depth curve with zero AMM-math risk. (A heavier alternative is
 to read the market's on-chain MarketState and price it with Pendle's own SDK;
 see README.)
 

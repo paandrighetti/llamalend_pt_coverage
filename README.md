@@ -57,16 +57,20 @@ python run_analysis.py --synthetic          # writes coverage_chart.png
 # 2) Find a market and pull a REAL depth curve (needs Pendle API access).
 #    discover_market.py prints a ready-to-paste pendle_depth.py command
 #    with the correct market, PT, and out-token addresses:
-python discover_market.py --query sUSDe
+python discover_market.py --query sUSDe --receiver 0xYourEOA
 
-# 3) Run the analysis on a measured curve. Parameter values below are
-#    illustrative; the exact PT-sUSDe calibration used in the forum post
-#    is documented in the post itself:
-python run_analysis.py --depth-csv pt_depth_curve.csv \
-    --maturity-years 0.5 --max-ltv 0.90 --representative-ltv 0.80 \
-    --pool-tvl 100e6 --band-drop 0.08 \
-    --depeg 0.03 --discount-widen 0.04 --horizon-days 2 \
-    --sigma-max 0.02 --maturity-haircut 0.15 --rho 0.5 --underlying-vol 0.10
+# 3) Reproduce the two governance-post anchors (section 4.3 calibrations):
+python run_analysis.py --depth-csv pt_susde_aug13_depth.csv \
+    --pt-symbol PT-sUSDe --underlying-symbol sUSDe \
+    --maturity-years 0.0658 --max-ltv 0.90 --representative-ltv 0.80 \
+    --pool-tvl 8321683 --band-drop 0.08 --depeg 0.03 --discount-widen 0.015 \
+    --horizon-days 2 --sigma-max 0.02 --maturity-haircut 0.05 --rho 0.5 --underlying-vol 0.10
+python run_analysis.py --depth-csv pt_reusd_dec10_depth.csv \
+    --pt-symbol PT-reUSD --underlying-symbol reUSD \
+    --maturity-years 0.389 --max-ltv 0.90 --representative-ltv 0.80 \
+    --pool-tvl 7568508 --band-drop 0.08 --depeg 0.03 --discount-widen 0.015 \
+    --horizon-days 2 --sigma-max 0.02 --maturity-haircut 0.15 --rho 0.5 --underlying-vol 0.10
+# Legacy June curve (pre-v0.2, aggregator-routed), illustrative only, kept for history
 ```
 
 ## The three real inputs (and where to get them)
@@ -92,10 +96,12 @@ The ceiling D* is an indicative figure under stated assumptions, not a guarantee
 
 * **`synthetic.py` is illustrative only.** No number in the accompanying
   analysis derives from it; every published figure comes from real retrieval
-  (`pt_depth_curve.csv`).
-* **The AMM is treated as source of truth, not re-implemented.** `pendle_depth.py`
+  (the governance curves `pt_susde_aug13_depth.csv` and
+  `pt_reusd_dec10_depth.csv`; the legacy June curve `pt_depth_curve.csv`
+  is retained for history only).
+* **The AMM is treated as the quoting authority, not re-implemented.** `pendle_depth.py`
   asks Pendle for quotes rather than re-deriving its (Notional-style) AMM math,
-  to avoid correctness risk. A fully trustless alternative is to read the
+  to avoid correctness risk. A heavier alternative is to read the
   onchain `MarketState` and price with Pendle's own SDK: heavier, same result.
 * **`V_liq` is modeled, not measured.** Where LlamaLend v2 PT markets are not
   live, the unwound-volume side uses a parametric soft-liquidation model
