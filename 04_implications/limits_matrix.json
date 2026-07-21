@@ -1,0 +1,89 @@
+{
+  "framework": {
+    "name": "RWA HQLA Internal Limits Matrix",
+    "version": "1.0",
+    "date": "2026-05-11",
+    "disclaimer": "These are starting-point analytical proposals, not regulatory limits. Each institution's ALM committee should re-calibrate based on size, complexity, risk appetite, existing liquid asset diversification, and supervisor dialogue.",
+    "reference_document": "04_implications/bank_implications.md"
+  },
+  "limits": {
+    "single_product": {
+      "cap_pct_of_total_liquid_assets": 5.0,
+      "rationale": "Avoid material exposure to a single wrapper plus issuer combination (e.g. BUIDL alone).",
+      "example": "For a bank with EUR 100bn liquid assets, max EUR 5bn in any single tokenised product."
+    },
+    "single_issuer": {
+      "cap_pct_of_total_liquid_assets": 10.0,
+      "rationale": "Avoid management concentration across products from the same issuer (e.g. all BlackRock-managed tokenised products combined).",
+      "example": "For a bank with EUR 100bn liquid assets, max EUR 10bn across all products from one issuer."
+    },
+    "single_chain": {
+      "cap_pct_of_tokenised_rwa_bucket": 25.0,
+      "rationale": "Diversify chain failure risk. BUIDL is ~95% on Ethereum, creating single-chain dependency.",
+      "example": "Within the tokenised RWA bucket, max 25% deployed on any single blockchain."
+    },
+    "single_custodian": {
+      "cap_pct_of_tokenised_rwa_bucket": 33.0,
+      "rationale": "Diversify operational custody risk across institutional custodians (Anchorage, Fireblocks, Coinbase Custody).",
+      "example": "Within the tokenised RWA bucket, max 33% under any single custody provider."
+    },
+    "aggregate": {
+      "cap_pct_of_total_liquid_assets_range": [1.0, 2.0],
+      "rationale": "Until products reach L1 HQLA status, tokenised treasuries should be a yield-enhancement allocation, not a structural liquidity reserve.",
+      "example": "For a bank with EUR 100bn liquid assets, max EUR 1-2bn aggregate tokenised RWA exposure.",
+      "calibration_guidance": {
+        "gsib": "Tighten further, e.g. 0.5% aggregate cap given systemic relevance.",
+        "midsize_bank": "1-2% appropriate as starting point.",
+        "fintech_neobank": "Not bound by LCR; use as inspiration, adapt to cash management context."
+      }
+    }
+  },
+  "exit_triggers": [
+    {
+      "trigger": "smart_contract_pause",
+      "threshold": "duration > 24 hours",
+      "action": "immediate liquidation review + emergency haircut overlay +15-20pp"
+    },
+    {
+      "trigger": "oracle_failure",
+      "threshold": "NAV vs on-chain price divergence > 1% sustained",
+      "action": "immediate liquidation review"
+    },
+    {
+      "trigger": "custody_breach",
+      "threshold": "any confirmed key compromise or unauthorized access",
+      "action": "immediate liquidation"
+    },
+    {
+      "trigger": "extraordinary_event_invocation",
+      "threshold": "issuer invokes any extraordinary event or liability cap clause (e.g. bIB01 Article XVII)",
+      "action": "immediate liquidation"
+    },
+    {
+      "trigger": "aggregate_breach",
+      "threshold": "aggregate exposure > 2.5% of liquid assets (10% over policy cap)",
+      "action": "rebalance to policy cap within 5 business days"
+    },
+    {
+      "trigger": "regulatory_enforcement",
+      "threshold": "enforcement action against any issuer",
+      "action": "immediate liquidation review for affected products"
+    }
+  ],
+  "haircut_reduction_on_progression": {
+    "L1_ucits_mmf_achieved": {
+      "reduction_pp": [10, 15],
+      "rationale": "UCITS MMF restructuration materially reduces wrapper risk"
+    },
+    "L2_ecb_collateral_eligible": {
+      "reduction_pp": [5, 10],
+      "rationale": "ECB collateral eligibility (operational since 30 March 2026) reduces settlement finality risk"
+    }
+  },
+  "review_cadence": {
+    "haircut_recalibration": "quarterly",
+    "limits_review": "quarterly",
+    "regulatory_monitoring": "quarterly",
+    "emergency_review": "on any exit trigger event"
+  }
+}

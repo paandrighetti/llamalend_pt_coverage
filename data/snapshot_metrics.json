@@ -1,0 +1,31 @@
+{
+  "snapshot_date": "2026-06-17",
+  "BUIDL": {
+    "holders_raw": 76,
+    "holders_effective_approx": 51,
+    "aum_ethereum_usd": 181293771.96,
+    "secondary_transfers": 3151,
+    "secondary_share_pct": 22.4,
+    "gini_reconstruction": 0.863,
+    "gini_feasible_lower": 0.85,
+    "gini_feasible_upper": 0.885,
+    "top3_share": 0.5522,
+    "top10_share": 0.8302,
+    "top25_share": 0.9954
+  },
+  "OUSG": {
+    "holders_raw": 69,
+    "aum_ethereum_usd": 1900000.0,
+    "secondary_transfers": 851,
+    "secondary_share_pct": 40.2
+  },
+  "bIB01": {
+    "holders_raw": 32,
+    "token_supply_ethereum": 40326.0,
+    "secondary_transfers": 492,
+    "secondary_share_pct": 96.5,
+    "aum_ethereum_usd": null,
+    "aum_note": "Product-specific Ethereum USD AUM is not established from the included public data package; Backed product-suite AUM must not be substituted for bIB01 AUM."
+  },
+  "_source": "Dune exports M1/M2/M2-bis, snapshot 2026-06-17; null values are deliberately unestablished (do not backfill without a sourced export)"
+}
