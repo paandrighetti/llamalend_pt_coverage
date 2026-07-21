@@ -12,19 +12,19 @@ into crvUSD, which ultimately means **selling the PT into its secondary market
 the event that *forces* the sale (an underlying depeg / a widening PT discount)
 is the same event that *drains* PT liquidity. That is a fire-sale exactly when you can
 least afford one, producing bad debt for lenders. So the binding question is not
-"what is the PT worth" (oracles solved that) but **"can the market absorb the
+"what is the PT worth" but **"can the market absorb the
 forced unwind without a fire-sale?"** This toolkit answers it by transposing the
 Basel III Liquidity Coverage Ratio (BCBS 238) survival-horizon logic onchain:
 
 ```
 Coverage ratio:  CR(D) = L_stress / V_liq(D)
-Safe ceiling:    D* = max { D : CR(D) >= 1 }
+Scenario ceiling: D* = max { D : CR(D) >= 1 }
 ```
 
 * `V_liq(D)`: PT collateral the market is forced to unwind under stress, given debt ceiling D
 * `L_stress`: PT secondary liquidity absorbable within an acceptable slippage bound, after a maturity haircut and a wrong-way (procyclical) depth-contraction factor
 
-If `V_liq(D) > L_stress`, the market is over-sized; `D*` is the largest safe size.
+If `V_liq(D) > L_stress`, the market is over-sized under the stated assumptions; `D*` is the largest ceiling supported by that scenario.
 
 ## Files
 
@@ -97,12 +97,13 @@ The ceiling D* is an indicative figure under stated assumptions, not a guarantee
 * **`synthetic.py` is illustrative only.** No number in the accompanying
   analysis derives from it; every published figure comes from real retrieval
   (the governance curves `pt_susde_aug13_depth.csv` and
-  `pt_reusd_dec10_depth.csv`; the legacy June curve `pt_depth_curve.csv`
-  is retained for history only).
+  `pt_reusd_dec10_depth.csv`; the legacy June curve `pt_depth_curve.csv` is
+  retained for history only).
 * **The AMM is treated as the quoting authority, not re-implemented.** `pendle_depth.py`
   asks Pendle for quotes rather than re-deriving its (Notional-style) AMM math,
-  to avoid correctness risk. A heavier alternative is to read the
-  onchain `MarketState` and price with Pendle's own SDK: heavier, same result.
+  to avoid reimplementation risk. A heavier alternative is to read the
+  onchain `MarketState` and price with Pendle's own SDK; the two approaches
+  should be compared rather than assumed identical.
 * **`V_liq` is modeled, not measured.** Where LlamaLend v2 PT markets are not
   live, the unwound-volume side uses a parametric soft-liquidation model
   (`soft_liq_band_drop`, `representative_ltv`). It is the most assumption-heavy
@@ -134,7 +135,7 @@ p.a.andrighetti@gmail.com
 
 ## Depth measurement notes
 
-`pendle_depth.py` v0.2 quotes with aggregator routing disabled by default (`--enable-aggregator` to opt in), enforces a spot sanity check on the smallest execution, and writes provenance columns (timestamp, chain, market, addresses, API base, routing mode) into the CSV. The two governance curves (`pt_susde_aug13_depth.csv`, `pt_reusd_dec10_depth.csv`) are v0.2 Pendle-only pulls with full provenance columns. The legacy `pt_depth_curve.csv` (June, pre-v0.2, aggregator-routed) is kept for history and superseded.
+`pendle_depth.py` v0.2 quotes with aggregator routing disabled by default (`--enable-aggregator` to opt in), enforces a unit-consistent USD spot sanity check on the smallest execution (use `--out-token-usd-price` when the output token is not at par), and writes provenance columns (timestamp, chain, market, addresses, API base, routing mode) into the CSV. The sUSDe governance curve is included as a v0.2 Pendle-only pull with provenance columns. The original reUSD CSV must be added separately before claiming full two-anchor reproducibility. The legacy `pt_depth_curve.csv` (June, pre-v0.2, aggregator-routed) is kept for history and superseded.
 
 ## License
 

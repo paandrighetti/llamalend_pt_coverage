@@ -6,10 +6,10 @@ WHY AN API AND NOT A HAND-ROLLED AMM
 Pendle's AMM math (a Notional-style logit curve scaled by time-to-maturity) is
 non-trivial and battle-tested. Re-implementing it blindly is a correctness risk.
 Instead we treat Pendle as the quoting authority: we ask it for a swap quote at a
-grid of sell sizes and read the resulting price impact. This yields the true
-on-venue depth curve with zero AMM-math risk. (A heavier alternative is
-to read the market's on-chain MarketState and price it with Pendle's own SDK;
-see README.)
+grid of sell sizes and read the resulting price impact. This avoids
+re-implementing Pendle AMM mathematics, while retaining API-schema, routing,
+unit-conversion, and data-availability risks. A heavier alternative is to read
+the market's on-chain MarketState and price it with Pendle's own SDK; see README.
 
 IMPORTANT
 ---------
@@ -133,6 +133,7 @@ def build_depth_curve(
     timeout: float,
     pause_s: float,
     enable_aggregator: bool = False,
+    out_token_usd_price: float = 1.0,
 ) -> tuple[list[tuple], float | None]:
     """
     Quote token_out for each PT sell size and build a size-driven slippage curve.
@@ -145,8 +146,10 @@ def build_depth_curve(
 
     Returns (rows, smallest_exec_price) where rows are
     (size_usd, impact, api_price_impact), size_usd = size_pt * usd_mark_per_pt,
-    impact is in [0,1), and smallest_exec_price is the out-token execution
-    price of the smallest filled size (used by the spot sanity check).
+    impact is in [0,1), and smallest_exec_price is the USD execution
+    price of the smallest filled size after applying ``out_token_usd_price``.
+    Set that conversion explicitly when the output token is not worth exactly
+    one US dollar.
     """
     raw: list[tuple] = []  # (size_pt, exec_price_out_per_pt, api_price_impact)
     for size_pt in sizes_pt:
@@ -173,7 +176,7 @@ def build_depth_curve(
             time.sleep(pause_s)
 
     if not raw:
-        return []
+        return [], None
 
     # Rebase to the SMALLEST-size execution price (the marginal price), isolating
     # size-driven slippage. Robust to price level / routing baseline / units.
@@ -190,8 +193,8 @@ def build_depth_curve(
               f"at the largest size quoted -- the pool is deep at these sizes. Increase "
               f"--max-size-pt to reach the region where slippage climbs.",
               file=sys.stderr)
-    smallest_exec = raw[0][1] if raw else None
-    return rows, smallest_exec
+    smallest_exec_usd = raw[0][1] * out_token_usd_price if raw else None
+    return rows, smallest_exec_usd
 
 
 def main() -> None:
@@ -208,9 +211,14 @@ def main() -> None:
     p.add_argument("--pt-decimals", type=int, default=18)
     p.add_argument("--out-decimals", type=int, default=18)
     p.add_argument("--spot-price", type=float, required=True,
-                   help="USD mark per PT, used only to scale the USD axis "
+                   help="USD mark per PT, used to scale the USD axis and check "
+                        "the smallest execution after output-token conversion "
                         "(~PT price, e.g. 0.99 near maturity). Slippage is rebased "
                         "to the marginal quote, so this does NOT affect impact.")
+    p.add_argument("--out-token-usd-price", type=float, default=1.0,
+                   help="USD price of one output-token unit for the spot sanity "
+                        "check. Default 1.0 is an explicit par assumption; set "
+                        "the observed value for depegged or non-USD output tokens.")
     p.add_argument("--min-size-pt", type=float, required=True,
                    help="smallest PT sell size to quote")
     p.add_argument("--max-size-pt", type=float, required=True,
@@ -236,6 +244,8 @@ def main() -> None:
         sys.exit("[pendle_depth] require 0 < --min-size-pt < --max-size-pt")
     if args.spot_price <= 0:
         sys.exit("[pendle_depth] --spot-price must be > 0")
+    if args.out_token_usd_price <= 0:
+        sys.exit("[pendle_depth] --out-token-usd-price must be > 0")
 
     sizes = [
         args.min_size_pt + (args.max_size_pt - args.min_size_pt) * k / (args.steps - 1)
@@ -245,6 +255,7 @@ def main() -> None:
         args.base_url, args.chain_id, args.market, args.pt_address, args.out_token,
         args.receiver, args.pt_decimals, args.out_decimals, args.spot_price,
         sizes, args.timeout, args.pause_s, args.enable_aggregator,
+        out_token_usd_price=args.out_token_usd_price,
     )
     if not rows:
         sys.exit(
@@ -254,13 +265,13 @@ def main() -> None:
             "(https://api-v2.pendle.finance/core/docs)."
         )
     # Spot sanity check promised in the module docstring: the smallest filled
-    # execution price should sit near the supplied spot mark. A large gap means
-    # a wrong unit, a wrong route, or a stale --spot-price; the curve would be
-    # rebased on a bad anchor.
+    # USD execution price should sit near the supplied USD spot mark. A
+    # large gap means a wrong unit, conversion, route, or stale --spot-price;
+    # the curve would be rebased on a bad anchor.
     if smallest_exec is not None:
         gap = abs(smallest_exec - args.spot_price) / args.spot_price
         if gap > args.spot_tolerance:
-            msg = (f"[pendle_depth] smallest-size exec price {smallest_exec:.6f} "
+            msg = (f"[pendle_depth] smallest-size USD exec price {smallest_exec:.6f} "
                    f"deviates {gap:.1%} from --spot-price {args.spot_price:.6f} "
                    f"(tolerance {args.spot_tolerance:.0%}).")
             if args.allow_spot_mismatch:
@@ -271,12 +282,14 @@ def main() -> None:
     import datetime as _dt
     prov = [_dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
             args.chain_id, args.market, args.pt_address, args.out_token,
-            args.base_url, str(args.enable_aggregator).lower(), args.spot_price]
+            args.base_url, str(args.enable_aggregator).lower(), args.spot_price,
+            args.out_token_usd_price]
     with open(args.out_csv, "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["size_usd", "impact", "api_price_impact",
                     "ts_utc", "chain_id", "market", "pt_address", "out_token",
-                    "api_base", "aggregator_enabled", "spot_price_arg"])
+                    "api_base", "aggregator_enabled", "spot_price_arg",
+                    "out_token_usd_price_arg"])
         w.writerows([list(r) + prov for r in rows])
     print(f"[pendle_depth] wrote {len(rows)} rows to {args.out_csv}")
 
