@@ -1,261 +1,126 @@
-# RWA HQLA Framework
+# LlamaLend PT Debt Ceilings: a Liquidity-Coverage Toolkit
 
-**A regulatory and empirical framework for assessing the High-Quality Liquid Asset (HQLA) eligibility of tokenised Real-World Assets under Basel III.**
+Sizing Pendle Principal Token (PT) debt ceilings in Curve LlamaLend from **soft-liquidation capacity** under correlated stress. Companion code to a governance research contribution on gov.curve.finance (empirical anchors, measured 19 July 2026: PT-sUSDe maturing 13 August 2026 and PT-reUSD maturing 10 December 2026).
 
-[![Framework Version](https://img.shields.io/badge/version-1.1.1-blue)]() [![Snapshot](https://img.shields.io/badge/snapshot-2026--06--17-green)]() [![Methodology](https://img.shields.io/badge/methodology-open-orange)]()
+## The idea in one paragraph
 
----
-
-## TL;DR
-
-Three widely cited tokenised treasury products, BlackRock BUIDL, Ondo OUSG, and Backed bIB01, are evaluated against a 24-criteria HQLA eligibility framework derived from BCBS 238, CRR (EU) 575/2013, and Commission Delegated Regulation (EU) 2015/61.
-
-**Verdict**: None of the three qualifies as HQLA Level 1, 2A, or 2B under Basel III LCR. The framework identifies the structural changes required to reach progressively higher eligibility levels (L0 → L3).
-
-**Scope note**: independent analytical assessment under the stated framework and public documentation as of the snapshot date. This is not legal, regulatory, accounting, or investment advice; no affiliation with or endorsement by any issuer is implied; supervisory conclusions may differ in specific cases.
-
-**Empirical layer**: On-chain analysis (snapshot 17 June 2026) shows that BUIDL has 76 holders on Ethereum mainnet (25 of them dust wallets, leaving 51 effective), a Gini coefficient of 0.863 (constrained reconstruction), bounded by linear programming to [0.850, 0.885] across all distributions consistent with the measured concentration constraints (Top-3 = 55% of supply, Top-25 = 99.5%), and approximately 4 secondary transfers per day averaged over 26 months. The market microstructure is materially more concentrated than that of traditional HQLA reference assets.
-
----
-
-## What's in this repo
+LlamaLend lends crvUSD against PT collateral. A PT is economically a zero-coupon
+claim that redeems 1:1 for an underlying at a fixed date. If collateral value
+falls, LLAMMA (Curve's soft-liquidation AMM) must progressively convert that PT
+into crvUSD, which ultimately means **selling the PT into its secondary market
+(Pendle)**. The more you must sell, the worse the price (slippage). The trap:
+the event that *forces* the sale (an underlying depeg / a widening PT discount)
+is the same event that *drains* PT liquidity. That is a fire-sale exactly when you can
+least afford one, producing bad debt for lenders. So the binding question is not
+"what is the PT worth" (oracles solved that) but **"can the market absorb the
+forced unwind without a fire-sale?"** This toolkit answers it by transposing the
+Basel III Liquidity Coverage Ratio (BCBS 238) survival-horizon logic onchain:
 
 ```
-.
-├── 01_framework/
-│   ├── eligibility_matrix.md       # 24-criteria scoring matrix (Markdown)
-│   ├── eligibility_matrix.json     # Structured scoring (JSON)
-│   ├── methodology.md              # Framework methodology
-│   └── scoring_heatmap.py          # Heatmap figure generator
-│
-├── 02_empirical/
-│   ├── dune_queries.sql            # SQL queries for Dune Analytics
-│   ├── lorenz_real_data.py         # Lorenz curve + Gini from holder export
-│   ├── market_comparison.py        # Block C four-panel comparison figure
-│   ├── aum_timeseries.py           # AUM trajectory visualisation
-│   ├── DUNE_SETUP_GUIDE.md         # Reproduce the live Dune dashboard
-│   └── empirical_findings.md       # Synthesis of empirical findings
-├── data/
-│   └── snapshot_metrics.json       # Canonical measured and estimated snapshot inputs
-│
-├── 03_gradient/
-│   ├── gradient_deepdive.md        # L0 → L3 roadmap analysis
-│   └── gradient_diagram.py         # Roadmap visualisation script
-│
-├── 04_implications/
-│   ├── bank_implications.md        # Practical framework for treasurers
-│   ├── haircut_calculator.py       # Internal haircut framework code
-│   └── limits_matrix.json          # Default limits configuration
-│
-├── 05_figures/
-│   ├── aum_timeseries.png/svg      # Reported AUM milestones; Backed line is product-suite, not bIB01-specific
-│   ├── scoring_heatmap.png         # 24 criteria across 3 products heatmap
-│   ├── lorenz_buidl.png (+_wide)   # BUIDL concentration Lorenz curve
-│   ├── market_comparison.png       # Block C empirical validation
-│   └── gradient_staircase.png/svg  # L0 → L3 roadmap visualisation
-│
-├── article/
-│   └── article.md                  # Final publication article (~6600 words)
-│
-├── CHANGELOG.md                     # v1.0 → v1.1 measured-data refresh
-├── LICENSE-CONTENT.md               # CC-BY-4.0 for content
-├── LICENSE-CODE.md                  # MIT for code
-└── README.md                        # This file
+Coverage ratio:  CR(D) = L_stress / V_liq(D)
+Safe ceiling:    D* = max { D : CR(D) >= 1 }
 ```
 
----
+* `V_liq(D)`: PT collateral the market is forced to unwind under stress, given debt ceiling D
+* `L_stress`: PT secondary liquidity absorbable within an acceptable slippage bound, after a maturity haircut and a wrong-way (procyclical) depth-contraction factor
 
-## Methodology
+If `V_liq(D) > L_stress`, the market is over-sized; `D*` is the largest safe size.
 
-The framework operates on a **4-block cascade**:
+## Files
 
-| Block | Criteria | Reference |
+| File | Role | Needs internet? |
 |---|---|---|
-| **A. Eligibility category** | Direct sovereign claim, UCITS look-through, Corporate debt CQS1, Level 2B equity | DR 2015/61 art. 10-15; BCBS 238 §49-54 |
-| **B. Operational requirements** | Unencumbered, control, monetisation, documentation, diversification | DR 2015/61 art. 7-8; BCBS 238 §28-43 |
-| **C. Market criteria** | Listed exchange, sizable market, committed MMs, low spreads, stress liquidity | BCBS 238 §24(c)-(f) |
-| **D. Wrapper-specific friction** | Settlement finality, custody layers, oracle, upgradeability, pause function, issuer call, substitution, extraordinary event, creditor cascade, ECB eligibility | Framework v1.1 contribution |
+| `coverage_model.py` | Core math: V_liq, L_stress, CR, D*, benchmark. Pure, typed, tested. | No |
+| `run_analysis.py` | CLI: load depth curve, produce report + chart. | No |
+| `synthetic.py` | Synthetic depth curve to demo the pipeline. **Illustrative only.** | No |
+| `discover_market.py` | Lists active Pendle markets matching a name and prints a ready-to-paste `pendle_depth.py` command with the correct addresses. | **Yes (Pendle API)** |
+| `pendle_depth.py` | Retrieval: builds the REAL PT price-impact curve from Pendle API swap quotes. | **Yes (Pendle API)** |
+| `dune/underlying_price_history.sql` | Underlying price history: stress depeg + rho calibration. | Run on Dune |
+| `dune/pendle_pt_liquidity_context.sql` | Pendle market liquidity context over time: rho. | Run on Dune |
+| `tests/test_coverage_model.py` | Unit tests (run: `python tests/test_coverage_model.py`). | No |
+| `governance/ForumPost_LlamaLend_PT.md` | The governance research post published on gov.curve.finance. | n/a |
+| `pt_susde_aug13_depth.csv` | Near-maturity anchor curve, Pendle-only, v0.2 provenance columns. | n/a |
+| `pt_reusd_dec10_depth.csv` | Far-maturity anchor curve, Pendle-only, v0.2 provenance columns. | n/a |
+| `pt_depth_curve.csv` | Legacy June pull (pre-v0.2, aggregator-routed): kept for history, superseded by the two curves above. | n/a |
+| `example_depth_curve.csv` | Minimal CSV schema example. | n/a |
+| `coverage_chart.png`, `dstar_vs_rho.png` | Output figures. | n/a |
 
-Each criterion is rated per product on a Pass / Conditional / Fail / N/A scale, with primary legal reference and source documentation.
-
----
-
-## Key findings
-
-### Three products, three failure modes
-
-| Product | Block A | Block B | Block C | Block D | Verdict |
-|---|---|---|---|---|---|
-| BlackRock BUIDL | Fail (cascade) | Conditional-Fail | Fail | 3 fails | **Not HQLA** |
-| Ondo OUSG | Fail (cascade) | Conditional-Fail | Fail | 3 fails | **Not HQLA** |
-| Backed bIB01 | Fail (cascade) | Fail | Fail | **8 fails** | **Not HQLA, additional contractual disqualifiers** |
-
-### bIB01 as structural outlier
-
-bIB01 fails five contractual disqualifiers that BUIDL and OUSG do not:
-- Article XVII Extraordinary Event: redemption can fall to $0.01
-- Article VI.iii unilateral Issuer Call with 30 BD notice
-- Article XXIV substitution of issuer without investor consent
-- Article XXII three-layer creditor cascade before investors
-- Section 6 explicit "Product not expected to be ECB eligible"
-
-### Empirical validation of Block C
-
-BUIDL on Ethereum mainnet, snapshot 17 June 2026:
-- 76 holders (roughly 25 dust wallets, ~51 effective)
-- $181M onchain AUM (approximately 8% of $2.28B multi-chain global; the bulk has migrated to Solana and other chains)
-- 14,046 cumulative transfers, of which 3,151 secondary (~4 secondary transfers per day)
-- Gini coefficient: **0.863** (constrained reconstruction; exact bounds [0.850, 0.885]; Top-3 = 55%, Top-10 = 83%, Top-25 = 99.5%)
-
-Direct comparison with traditional securities is not like-for-like: blockchain addresses are not equivalent to beneficial owners or brokerage accounts. The on-chain metrics are therefore used as product-level evidence, not as a harmonised cross-market Gini benchmark.
-
----
-
-## The gradient L0 → L3
-
-| Level | Description | Timeline | Resulting eligibility |
-|---|---|---|---|
-| **L0** | Status quo (June 2026) | Today | Not HQLA |
-| **L1** | UCITS MMF restructuration | 12-30 months | HQLA Level 1/2A via Art. 15 look-through |
-| **L2** | DLT-issued via authorised CSD | 6-24 months | Potential ECB collateral route for assets that also satisfy the standard eligibility and settlement criteria |
-| **L3** | Native sovereign DLT | 5-7 years | Direct Level 1 HQLA |
-
-The L1+L2 combination (24-36 months) is the most credible institutional roadmap for BUIDL, with BlackRock as the natural executor given its existing UCITS infrastructure in Luxembourg and Ireland.
-
----
-
-## Practical framework for treasurers
-
-For bank treasurers needing to handle tokenised RWA exposures today (not HQLA but not excluded):
-
-**Internal haircut framework** (cumulative 23-40% over book value):
-- Custody chain risk: 5-10%
-- Settlement finality risk: 10-15%
-- Contract upgradeability risk: 3-5%
-- Issuer concentration risk: 5-10%
-
-**Internal limits matrix** (to calibrate per ALM committee):
-- Single-product cap: 5% of total liquid assets
-- Single-issuer cap: 10% of total liquid assets
-- Single-chain cap: 25% of tokenised RWA
-- Single-custodian cap: 33% of tokenised RWA
-- Total tokenised RWA cap: 1-2% of total liquid assets
-
----
-
-## Limitations and caveats
-
-1. Framework is based on publicly available documentation. Private Placement Memoranda for BUIDL and Ondo I LP are not public.
-2. bIB01 Securities Note dated 8 May 2025 expired 7 May 2026; no successor base prospectus was published at the snapshot date, and the issuer (Backed Finance AG) was acquired by Kraken in January 2026. Verify the current prospectus status before relying on the Block D analysis.
-3. Empirical snapshot is 17 June 2026; products evolve fast.
-4. The framework is one analyst's contribution. Final supervisory verdict may differ in specific cases.
-5. The "if I were the treasurer" section reflects analytical reasoning, not the operational practice of any specific institution.
-
----
-
-## How to use this repo
-
-### For regulatory analysts
-- Read `01_framework/eligibility_matrix.md` for the verdict and reasoning
-- Cite primary sources from each cell of the matrix
-- Apply the framework to new products by re-running the 24-criteria assessment
-
-### For DeFi risk analysts
-- Use `02_empirical/dune_queries.sql` to run real-time concentration metrics
-- Adapt `02_empirical/lorenz_real_data.py` and the Dune queries for new products
-- Track AUM, holder concentration, and transfer activity quarterly
-
-### For bank treasurers
-- Use `04_implications/bank_implications.md` as a working framework
-- Calibrate the haircut and limits per your ALM committee judgement
-- Monitor the regulatory checklist quarterly
-
-### For students and researchers
-- The matrix encodes the BCBS/CRR HQLA framework in machine-readable JSON
-- `02_empirical/lorenz_real_data.py` demonstrates Gini, exact LP bounds, and Lorenz curve computation
-- The gradient diagram shows the regulatory evolution path
-
----
-
-## Reproducibility
-
-To reproduce the empirical analysis:
+## Quick start
 
 ```bash
 pip install -r requirements.txt
 
-python 01_framework/scoring_heatmap.py       # verdict heatmap from the JSON matrix
-python 02_empirical/lorenz_real_data.py      # prints Gini 0.863 and recomputes the exact LP bounds [0.850, 0.885]
-python 02_empirical/market_comparison.py
-python 02_empirical/aum_timeseries.py
-python 03_gradient/gradient_diagram.py
+# 1) Verify the engine and run an illustrative demo (no network):
+python tests/test_coverage_model.py
+python run_analysis.py --synthetic          # writes coverage_chart.png
+
+# 2) Find a market and pull a REAL depth curve (needs Pendle API access).
+#    discover_market.py prints a ready-to-paste pendle_depth.py command
+#    with the correct market, PT, and out-token addresses:
+python discover_market.py --query sUSDe --receiver 0xYourEOA
+
+# 3) Reproduce the two governance-post anchors (section 4.3 calibrations):
+python run_analysis.py --depth-csv pt_susde_aug13_depth.csv \
+    --pt-symbol PT-sUSDe --underlying-symbol sUSDe \
+    --maturity-years 0.0658 --max-ltv 0.90 --representative-ltv 0.80 \
+    --pool-tvl 8321683 --band-drop 0.08 --depeg 0.03 --discount-widen 0.015 \
+    --horizon-days 2 --sigma-max 0.02 --maturity-haircut 0.05 --rho 0.5 --underlying-vol 0.10
+python run_analysis.py --depth-csv pt_reusd_dec10_depth.csv \
+    --pt-symbol PT-reUSD --underlying-symbol reUSD \
+    --maturity-years 0.389 --max-ltv 0.90 --representative-ltv 0.80 \
+    --pool-tvl 7568508 --band-drop 0.08 --depeg 0.03 --discount-widen 0.015 \
+    --horizon-days 2 --sigma-max 0.02 --maturity-haircut 0.15 --rho 0.5 --underlying-vol 0.10
+# Legacy June curve (pre-v0.2, aggregator-routed), illustrative only, kept for history
 ```
 
-All five scripts embed their measured inputs and run offline; figures are written to `05_figures/`.
+## The three real inputs (and where to get them)
 
-To extract live on-chain data:
-1. Open a Dune Analytics account
-2. Copy queries from `02_empirical/dune_queries.sql`
-3. Adjust contract addresses if needed (verify via Etherscan)
-4. Compare the exported values against the constants embedded in the scripts
+1. **Depth / slippage curve**: `pendle_depth.py` (Pendle Hosted SDK swap quotes
+   over a grid of sizes). This is the load-bearing input.
+2. **Stress calibration** (`--depeg`, `--discount-widen`): from the underlying's
+   worst historical deviation and the PT discount history (`dune/underlying_price_history.sql`).
+3. **Wrong-way factor** (`--rho`): from the co-movement of underlying deviation
+   and PT depth (both Dune queries). Until estimated, treat `rho` as a sensitivity input.
 
----
+## Model scope and assumptions (v0.2)
 
-## Dune dashboard
+The ceiling D* is an indicative figure under stated assumptions, not a guarantee. Read these before quoting any number:
 
-A live dashboard tracking the metrics in this framework is available at: https://dune.com/bandulf/rwa-hqla-framework-live-metrics.
+* Static coverage constraint, not a simulation: no dynamic model of LLAMMA band traversal, oracle path, arbitrage or de-liquidation. The soft-liquidated fraction is a linear proxy in the collateral shock.
+* The horizon H parameterises the calibration of the stress inputs (depeg, discount widening, withdrawal fraction are H-horizon stressed moves); stressed depth is treated as instantaneous capacity with no replenishment term, which is conservative for multi-day horizons.
+* The maturity effect enters through the exogenous haircut h(tau) supplied per maturity family; `maturity_years` feeds the depth-agnostic benchmark, not the coverage formula.
+* A single representative LTV stands in for the borrower distribution; `max_ltv` is a validation bound.
+* Every unit unwound by LLAMMA is assumed to hit Pendle secondary liquidity one for one (no OTC absorption, no holders of last resort): conservative.
 
-The dashboard tracks:
-- AUM time-series for BUIDL, OUSG, bIB01
-- Holders concentration (Gini coefficient, Top-10 share)
-- Daily transfer activity
-- Primary vs secondary volume ratio
-- Cross-chain distribution
+## Limitations
+
+* **`synthetic.py` is illustrative only.** No number in the accompanying
+  analysis derives from it; every published figure comes from real retrieval
+  (the governance curves `pt_susde_aug13_depth.csv` and
+  `pt_reusd_dec10_depth.csv`; the legacy June curve `pt_depth_curve.csv`
+  is retained for history only).
+* **The AMM is treated as the quoting authority, not re-implemented.** `pendle_depth.py`
+  asks Pendle for quotes rather than re-deriving its (Notional-style) AMM math,
+  to avoid correctness risk. A heavier alternative is to read the
+  onchain `MarketState` and price with Pendle's own SDK: heavier, same result.
+* **`V_liq` is modeled, not measured.** Where LlamaLend v2 PT markets are not
+  live, the unwound-volume side uses a parametric soft-liquidation model
+  (`soft_liq_band_drop`, `representative_ltv`). It is the most assumption-heavy
+  piece; report it with sensitivity, not as a point estimate.
+* **The benchmark ceiling is illustrative.** `heuristic_depth_agnostic_ceiling`
+  is a depth-agnostic stand-in to make the comparison concrete; the contribution
+  is the *method* and the *relative* result (does execution bind tighter?), not
+  that specific number.
+* **API drift.** Pendle and Dune routes change; `pendle_depth.py` fails loudly on
+  a schema mismatch. Verify against current Pendle API docs.
 
 ---
 
 ## Citing this work
 
-If this framework informs your research or analysis, please cite:
+If this toolkit informs your research or analysis, please cite:
 
-> Pierre-Antoine Andrighetti. (2026). *RWA HQLA Framework v1.1: A regulatory and empirical assessment of tokenised treasury HQLA eligibility.* https://github.com/paandrighetti/RWA_analysis
-
----
-
-## Contributing
-
-This framework is intended as a first version, an opening contribution to an analytical debate. Constructive challenges and methodological improvements are welcome via GitHub issues or pull requests.
-
-Topics where peer feedback would be particularly valuable:
-- Block A.2 UCITS look-through interpretation (especially for OUSG fund-of-funds structure)
-- Block C empirical thresholds (what would qualify as "sizable market" quantitatively)
-- Block D weighting scheme (currently all fails are equal; some may deserve higher weight)
-- ICAAP capital allocation methodology for tokenised RWA exposures
-
----
-
-## License
-
-- **Content** (Markdown documents, framework methodology): Creative Commons Attribution 4.0 (CC-BY-4.0)
-- **Code** (Python scripts, SQL queries): MIT License
-
----
-
-## Acknowledgements
-
-This framework synthesises primary regulatory texts from:
-- Basel Committee on Banking Supervision (BCBS)
-- European Banking Authority (EBA)
-- European Securities and Markets Authority (ESMA)
-- European Central Bank (ECB)
-- US Federal Reserve / OCC / FDIC
-
-The empirical layer relies on data from:
-- Etherscan
-- CoinGecko
-- RWA.xyz
-- Dune Analytics
-- 21co Tokenization Government Securities dashboard
+> Pierre-Antoine Andrighetti. (2026). *LlamaLend PT debt ceilings: a liquidity-coverage toolkit for Pendle principal-token collateral under correlated stress.* https://github.com/paandrighetti/llamalend_pt_coverage
 
 ---
 
@@ -264,3 +129,21 @@ The empirical layer relies on data from:
 https://www.linkedin.com/in/pierre-antoine-andrighetti
 https://x.com/bandulf
 p.a.andrighetti@gmail.com
+
+---
+
+## Depth measurement notes
+
+`pendle_depth.py` v0.2 quotes with aggregator routing disabled by default (`--enable-aggregator` to opt in), enforces a spot sanity check on the smallest execution, and writes provenance columns (timestamp, chain, market, addresses, API base, routing mode) into the CSV. The two governance curves (`pt_susde_aug13_depth.csv`, `pt_reusd_dec10_depth.csv`) are v0.2 Pendle-only pulls with full provenance columns. The legacy `pt_depth_curve.csv` (June, pre-v0.2, aggregator-routed) is kept for history and superseded.
+
+## License
+
+MIT. See [LICENSE](./LICENSE).
+
+## Disclaimer
+
+This work is independent and exploratory. It is not investment advice, not a
+recommendation to borrow from or provide liquidity to any Curve LlamaLend or
+Pendle market, and not a substitute for a security audit or formal risk
+assessment. The author has no affiliation with Curve, LlamaRisk, or Pendle
+beyond public usage.
