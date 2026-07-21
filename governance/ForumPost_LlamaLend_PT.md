@@ -1,6 +1,6 @@
 # Sizing Pendle PT Debt Ceilings in LlamaLend v2 from Soft-Liquidation Capacity
 
-*Independent contribution. All figures measured 19 July 2026 with the published toolkit, Pendle-only routing, provenance columns in the repository CSVs.*
+*Independent contribution. All figures measured 19-21 July 2026 with the published toolkit, Pendle-only routing, provenance columns in the repository CSVs.*
 
 **TL;DR.** Pricing PTs is largely solved (ELB and related oracles); executing a stressed unwind through LLAMMA is not. This post transposes the Liquidity Coverage Ratio logic to soft-liquidation: a PT market's debt ceiling should be covered by stress-contracted, Pendle-only exit depth over the liquidation horizon. Measured on two live maturities (19 July 2026), execution capacity is regime-dependent: a hard proportion cap near maturity, gradual slippage further out. Under correlated stress (ρ in [0.3, 0.5]) the resulting ceilings sit well below displayed TVL on both anchors; per-market figures in section 4. Method, code, curves and provenance are open-source.
 
@@ -61,7 +61,7 @@ Pool TVL $8.32M, implied yield 4.3%, spot 0.8042 sUSDe per PT. Across every size
 
 ### 4.2 Away from maturity: PT-reUSD, matures 10-Dec-2026 (τ = 0.389 yr)
 
-Pool TVL $7.57M, implied yield 10.4%. Here the regime inverts: slippage climbs progressively with size from the smallest quotes onward, the σ_max = 2% bound binds within the quotable range, well below any proportion cap. This is the general regime the framework targets, and the one where a calm-depth or maturity-only rule mis-sizes most: measured, executable depth within the slippage bound is a strict subset of displayed TVL.
+Pool TVL $7.57M (19 July); PT mark 0.881 USD, implied yield near 38% at the 21 July re-measurement. Here the regime inverts: slippage climbs progressively with size from the smallest quotes onward, the σ_max = 2% bound binds within the quotable range, well below any proportion cap. The depth curve was re-measured on 21 July after an upstream quoting-unit change on the Pendle API (documented in the repository); the regime is unchanged. This is the general regime the framework targets, and the one where a calm-depth or maturity-only rule mis-sizes most: measured, executable depth within the slippage bound is a strict subset of displayed TVL.
 
 ### 4.3 Ceilings under the coverage constraint
 
@@ -69,8 +69,8 @@ Running the identical stress calibration on both curves (3% underlying depeg, 1.
 
 | ρ (stressed depth retention) | D* PT-sUSDe, central (conservative) | D* PT-reUSD, central (conservative) |
 |---|---:|---:|
-| 0.5 | $1.72M ($0.96M) | $2.94M ($1.63M) |
-| 0.3 | $1.03M ($0.57M) | $1.76M ($0.98M) |
+| 0.5 | $1.72M ($0.96M) | $2.69M ($1.50M) |
+| 0.3 | $1.03M ($0.57M) | $1.62M ($0.90M) |
 
 Recommended anchoring ρ in [0.3, 0.5], consistent with liquidity contractions observed in past stablecoin-depeg episodes; per-market outputs and charts are in the repository.
 
