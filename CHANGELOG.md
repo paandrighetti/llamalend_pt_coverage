@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.2.2 (2026-07-22)
+
+- Distinguished explicit empty-route responses from technical API failures.
+- Abort measurements on rate limits, HTTP errors, timeouts and schema errors
+  rather than interpreting them as liquidity-depth observations.
+- Sort successful quotes by PT size before selecting the marginal reference.
+- Raised the default Hosted SDK timeout to 120 seconds.
+- Expanded CI to Python 3.10-3.13 and the complete pytest suite.
+
 ## v0.2.1 (2026-07-22)
 
 - Migrated fresh quote retrieval to Pendle's recommended v3 Convert POST endpoint.

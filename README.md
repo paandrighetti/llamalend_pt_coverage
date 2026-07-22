@@ -142,9 +142,6 @@ p.a.andrighetti@gmail.com
 
 ---
 
-## Depth measurement notes
-
-
 ## License
 
 MIT. See [LICENSE](./LICENSE).
