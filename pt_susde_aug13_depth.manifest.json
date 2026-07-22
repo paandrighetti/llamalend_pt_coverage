@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "publication_ready": true,
+  "filename": "pt_susde_aug13_depth.csv",
+  "sha256": "c9c266d5e4d9566fddcbf0ad8becf2c1772d594ad4571a9d3853a6e5fe640713",
+  "rows": 15,
+  "size_usd_min": 804.23,
+  "size_usd_max": 5864512.179166666,
+  "impact_min": 0.0,
+  "impact_max": 0.0044309232985765,
+  "observed_at": "2026-07-20T07:51:14+00:00",
+  "chain_id": 1,
+  "market": "0x177768caf9d0e036725a51d3f60d7e20f2d4d194",
+  "pt_address": "0x5a19fa369f2895dcd8d2cee62e4ceae58ef92bbb",
+  "out_token": "0x9d39a5de30e57443bff2a8307a4256c8797a3497",
+  "api_base": "https://api-v2.pendle.finance/core",
+  "aggregator_enabled": false,
+  "spot_price_arg": 0.80423,
+  "collector_version": "v0.2 market-specific Pendle Hosted SDK collection",
+  "limitations": [
+    "The CSV is a dated quote snapshot, not live liquidity.",
+    "The quoted route and API schema may change after collection.",
+    "Publication use requires the SHA-256 hash to match."
+  ]
+}

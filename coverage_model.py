@@ -141,12 +141,18 @@ class DepthCurve:
         i = np.asarray(impacts, dtype=float)
         if s.ndim != 1 or i.ndim != 1 or s.size != i.size or s.size < 2:
             raise ValueError("sizes and impacts must be 1-D arrays of equal length >= 2")
+        if not np.all(np.isfinite(s)):
+            raise ValueError("sizes must contain only finite values")
+        if not np.all(np.isfinite(i)):
+            raise ValueError("impacts must contain only finite values")
+        if np.any(s <= 0):
+            raise ValueError("sizes must be strictly positive")
+        if np.any((i < 0) | (i >= 1)):
+            raise ValueError("impacts must be in [0, 1)")
         if np.any(np.diff(s) <= 0):
             raise ValueError("sizes must be strictly increasing")
         if np.any(np.diff(i) < 0):
             raise ValueError("impacts must be non-decreasing")
-        if s[0] < 0 or i[0] < 0:
-            raise ValueError("sizes and impacts must be non-negative")
         self.sizes = s
         self.impacts = i
 

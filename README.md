@@ -41,19 +41,21 @@ If `V_liq(D) > L_stress`, the market is over-sized under the stated assumptions;
 | `governance/ForumPost_LlamaLend_PT.md` | The governance research post published on gov.curve.finance. | n/a |
 | `pt_susde_aug13_depth.csv` | Near-maturity anchor curve, Pendle-only, v0.2 provenance columns. | n/a |
 | `pt_reusd_dec10_depth.csv` | Far-maturity anchor curve, Pendle-only, v0.2 provenance columns. | n/a |
-| `pt_depth_curve.csv` | Legacy June pull (pre-v0.2, aggregator-routed): kept for history, superseded by the two curves above. | n/a |
+| `data/legacy/pt_depth_curve.csv` | Legacy June pull (pre-v0.2, aggregator-routed): kept for history, superseded by the two curves above. | n/a |
 | `estimate_rho.py` | Wrong-way factor estimation: episode and regression estimators on underlying-deviation vs pool-capacity co-movement, honest not-calibratable branch. | `python estimate_rho.py --synthetic` |
 | `fetch_rho_inputs.py` | DefiLlama-fed builder for the rho input series (daily underlying price + pool TVL). | see `--help` |
 | `dune/*.sql` | Three queries: underlying price history, pool TVL history, Pendle market liquidity context (rho protocol and monitoring inputs). | n/a |
 | `rho_inputs.csv`, `rho_inputs_dola.csv`, `rho_wrongway_*.png` | Corrected USDe-series inputs and co-movement charts for the two sampled pools. | n/a |
-| `pt_depth_curve_2.csv`, `make_market2_figs.py`, `coverage_chart_2.png` | **Exploratory** third-regime study (PT-wstETH, long-dated volatile underlying); pre-provenance pull, re-measurement with the v0.2 script planned before any published use. | n/a |
-| `example_depth_curve.csv` | Minimal CSV schema example. | n/a |
+| `data/exploratory/pt_depth_curve_2.csv`, `make_market2_figs.py`, `coverage_chart_2.png` | **Exploratory** third-regime study (PT-wstETH, long-dated volatile underlying); pre-provenance pull, re-measurement with the v0.2 script planned before any published use. | n/a |
+| `examples/example_depth_curve.csv` | Minimal CSV schema example. | n/a |
 | `coverage_chart.png`, `dstar_vs_rho.png` | Output figures. | n/a |
+
+Publication curves require adjacent `.manifest.json` files. `run_analysis.py` verifies the SHA-256 hash and rejects unmanifested data unless `--allow-nonpublication-data` is passed explicitly for legacy or exploratory work.
 
 ## Quick start
 
 ```bash
-pip install -r requirements.txt
+python -m pip install -e ".[dev]"
 
 # 1) Verify the engine and run an illustrative demo (no network):
 python -m pytest -q
@@ -76,7 +78,12 @@ python run_analysis.py --depth-csv pt_reusd_dec10_depth.csv \
     --maturity-years 0.389 --max-ltv 0.90 --representative-ltv 0.80 \
     --pool-tvl 7568508 --band-drop 0.08 --depeg 0.03 --discount-widen 0.015 \
     --horizon-days 2 --sigma-max 0.02 --maturity-haircut 0.15 --rho 0.5 --underlying-vol 0.10
-# Legacy June curve (pre-v0.2, aggregator-routed), illustrative only, kept for history
+# Legacy June curve (pre-v0.2, aggregator-routed), illustrative only:
+python run_analysis.py --depth-csv data/legacy/pt_depth_curve.csv \
+    --allow-nonpublication-data --maturity-years 0.5 --max-ltv 0.90 \
+    --representative-ltv 0.80 --pool-tvl 100e6 --band-drop 0.08 \
+    --depeg 0.03 --discount-widen 0.04 --horizon-days 2 \
+    --sigma-max 0.02 --maturity-haircut 0.15 --rho 0.5 --underlying-vol 0.10
 ```
 
 ## The three empirical inputs (and where to get them)
@@ -103,7 +110,7 @@ The ceiling D* is an indicative figure under stated assumptions, not a guarantee
 * **`synthetic.py` is illustrative only.** No number in the accompanying
   analysis derives from it; every published figure comes from an empirical retrieval
   (the governance curves `pt_susde_aug13_depth.csv` and
-  `pt_reusd_dec10_depth.csv`; the legacy June curve `pt_depth_curve.csv` is
+  `pt_reusd_dec10_depth.csv`; the legacy June curve `data/legacy/pt_depth_curve.csv` is
   retained for history only).
 * **The AMM is treated as the quoting authority, not re-implemented.** `pendle_depth.py`
   asks Pendle for quotes rather than re-deriving its (Notional-style) AMM math,

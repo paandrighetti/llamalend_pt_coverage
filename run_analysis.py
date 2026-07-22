@@ -17,6 +17,9 @@ python run_analysis.py --depth-csv pt_depth_curve.csv \
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
+from pathlib import Path
 
 import matplotlib
 matplotlib.use("Agg")  # headless
@@ -43,15 +46,102 @@ def _fmt(x: float) -> str:
     return f"${x/1e6:,.2f}M" if abs(x) >= 1e6 else f"${x:,.0f}"
 
 
+REQUIRED_DEPTH_COLUMNS = {"size_usd", "impact"}
+
+
+def canonical_file_sha256(path: Path) -> str:
+    """Hash text artifacts with CRLF normalised for cross-platform checkout."""
+    content = path.read_bytes().replace(b"\r\n", b"\n")
+    return hashlib.sha256(content).hexdigest()
+
+
+def validate_publication_manifest(
+    csv_path: Path,
+    allow_nonpublication_data: bool,
+) -> dict[str, object] | None:
+    manifest_path = csv_path.with_suffix(".manifest.json")
+    if not manifest_path.exists():
+        if allow_nonpublication_data:
+            return None
+        raise ValueError(
+            f"publication manifest missing for {csv_path}; "
+            "pass --allow-nonpublication-data only for legacy or exploratory runs"
+        )
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not manifest.get("publication_ready", False) and not allow_nonpublication_data:
+        raise ValueError(f"{manifest_path} is not marked publication_ready")
+
+    expected_hash = str(manifest["sha256"])
+    observed_hash = canonical_file_sha256(csv_path)
+    if observed_hash != expected_hash:
+        raise ValueError(
+            f"SHA-256 mismatch for {csv_path}: expected {expected_hash}, "
+            f"observed {observed_hash}"
+        )
+    return manifest
+
+
+def validate_and_prepare_depth_frame(
+    frame: pd.DataFrame,
+    max_adjustment_bps: float,
+) -> tuple[pd.DataFrame, float]:
+    missing = REQUIRED_DEPTH_COLUMNS - set(frame.columns)
+    if missing:
+        raise ValueError(f"depth CSV is missing columns: {sorted(missing)}")
+    if max_adjustment_bps < 0:
+        raise ValueError("max_monotonic_adjustment_bps must be non-negative")
+
+    selected = frame[["size_usd", "impact"]].copy()
+    selected["size_usd"] = pd.to_numeric(selected["size_usd"], errors="raise")
+    selected["impact"] = pd.to_numeric(selected["impact"], errors="raise")
+    values = selected[["size_usd", "impact"]].to_numpy(dtype=float)
+    if not np.all(np.isfinite(values)):
+        raise ValueError("depth CSV contains NaN or infinite values")
+    if (selected["size_usd"] <= 0).any():
+        raise ValueError("size_usd must be strictly positive")
+    if ((selected["impact"] < 0) | (selected["impact"] >= 1)).any():
+        raise ValueError("impact must be in [0, 1)")
+
+    selected = selected.sort_values("size_usd")
+    duplicate_sizes = selected[selected.duplicated(subset="size_usd", keep=False)]
+    if not duplicate_sizes.empty:
+        conflicts = duplicate_sizes.groupby("size_usd")["impact"].nunique()
+        if (conflicts > 1).any():
+            raise ValueError("duplicate trade sizes have conflicting impacts")
+        selected = selected.drop_duplicates(subset="size_usd", keep="first")
+
+    raw_impacts = selected["impact"].to_numpy(dtype=float)
+    adjusted_impacts = np.maximum.accumulate(raw_impacts)
+    max_adjustment = float(np.max(adjusted_impacts - raw_impacts))
+    if max_adjustment > max_adjustment_bps / 10_000:
+        raise ValueError(
+            "depth curve requires a monotonic adjustment of "
+            f"{max_adjustment * 10_000:.2f} bps, above the allowed "
+            f"{max_adjustment_bps:.2f} bps"
+        )
+    selected["impact"] = adjusted_impacts
+    return selected, max_adjustment
+
+
 def load_depth(args: argparse.Namespace) -> tuple[DepthCurve, bool]:
     if args.synthetic:
         return synthetic_depth_curve(args.pool_tvl), True
-    df = pd.read_csv(args.depth_csv).sort_values("size_usd")
-    df = df[df["size_usd"] > 0].drop_duplicates(subset="size_usd")
-    # enforce a monotone, non-decreasing slippage curve (conservative) against
-    # small non-monotonicities from quote noise
-    df["impact"] = df["impact"].cummax()
-    return DepthCurve(df["size_usd"].to_numpy(), df["impact"].to_numpy()), False
+
+    csv_path = Path(args.depth_csv)
+    manifest = validate_publication_manifest(csv_path, args.allow_nonpublication_data)
+    frame, max_adjustment = validate_and_prepare_depth_frame(
+        pd.read_csv(csv_path),
+        args.max_monotonic_adjustment_bps,
+    )
+    if max_adjustment > 0:
+        print(
+            "[run_analysis] applied monotonic adjustment: "
+            f"{max_adjustment * 10_000:.3f} bps"
+        )
+    if manifest is not None:
+        print(f"[run_analysis] verified publication manifest: {csv_path.with_suffix('.manifest.json')}")
+    return DepthCurve(frame["size_usd"].to_numpy(), frame["impact"].to_numpy()), False
 
 
 def main() -> None:
@@ -61,6 +151,21 @@ def main() -> None:
     src.add_argument("--synthetic", action="store_true",
                      help="use a synthetic depth curve (illustrative only)")
     src.add_argument("--depth-csv", help="CSV from pendle_depth.py [size_usd,impact]")
+
+    p.add_argument(
+        "--allow-nonpublication-data",
+        action="store_true",
+        help=(
+            "allow a curve without a publication-ready sidecar manifest; "
+            "intended only for legacy or exploratory work"
+        ),
+    )
+    p.add_argument(
+        "--max-monotonic-adjustment-bps",
+        type=float,
+        default=5.0,
+        help="largest tolerated cumulative monotonic correction in basis points",
+    )
 
     p.add_argument("--pt-symbol", default="PT-sUSDe")
     p.add_argument("--underlying-symbol", default="sUSDe")
