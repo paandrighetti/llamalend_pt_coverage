@@ -36,6 +36,12 @@ import requests
 DEFAULT_BASE_URL = "https://api-v2.pendle.finance/core"
 
 
+class QuoteCollectionError(SystemExit):
+    """Abort a depth measurement that is invalid for technical reasons."""
+
+
+
+
 def _post(
     url: str,
     payload: dict[str, Any],
@@ -43,36 +49,121 @@ def _post(
     soft: bool = False,
     max_retries: int = 5,
 ) -> dict[str, Any] | None:
-    """POST JSON with the same retry/error contract as :func:`_get`."""
+    """POST JSON and preserve the distinction between routing and API failures."""
+
     delay = 2.0
+
     for attempt in range(max_retries + 1):
         try:
             resp = requests.post(url, json=payload, timeout=timeout)
-        except requests.RequestException as e:
+
+        except requests.Timeout as exc:
+            result = {
+                "__error__": f"request timed out: {exc}",
+                "__kind__": "timeout",
+            }
+
             if soft:
-                return {"__error__": f"request failed: {e}"}
-            sys.exit(f"[pendle_depth] request failed for {url}: {e}")
+                return result
+
+            raise QuoteCollectionError(
+                f"[pendle_depth] request timed out for {url}: {exc}"
+            ) from exc
+
+        except requests.RequestException as exc:
+            result = {
+                "__error__": f"request failed: {exc}",
+                "__kind__": "request_error",
+            }
+
+            if soft:
+                return result
+
+            raise QuoteCollectionError(
+                f"[pendle_depth] request failed for {url}: {exc}"
+            ) from exc
+
         if resp.status_code == 429 and attempt < max_retries:
             time.sleep(delay)
             delay = min(delay * 2, 30.0)
             continue
+
         if resp.status_code != 200:
-            result = {"__error__": resp.text[:300], "__status__": resp.status_code}
+            status = resp.status_code
+
+            if status == 429:
+                kind = "rate_limited"
+            elif status in {400, 401, 403, 404, 409, 422}:
+                kind = "client_error"
+            elif status >= 500:
+                kind = "server_error"
+            else:
+                kind = "http_error"
+
+            result = {
+                "__error__": resp.text[:300],
+                "__status__": status,
+                "__kind__": kind,
+            }
+
             if soft:
                 return result
-            sys.exit(
-                f"[pendle_depth] HTTP {resp.status_code} for {url}\n"
+
+            raise QuoteCollectionError(
+                f"[pendle_depth] HTTP {status} for {url}\n"
                 f"Response: {resp.text[:1000]}"
             )
+
         try:
-            return resp.json()
-        except ValueError:
+            decoded = resp.json()
+
+        except ValueError as exc:
+            result = {
+                "__error__": "non-JSON response",
+                "__status__": resp.status_code,
+                "__kind__": "schema_error",
+            }
+
             if soft:
-                return {"__error__": "non-JSON response"}
-            sys.exit(f"[pendle_depth] non-JSON response for {url}:\n{resp.text[:1000]}")
+                return result
+
+            raise QuoteCollectionError(
+                f"[pendle_depth] non-JSON response for {url}:\n"
+                f"{resp.text[:1000]}"
+            ) from exc
+
+        if not isinstance(decoded, dict):
+            result = {
+                "__error__": (
+                    f"unexpected JSON type: {type(decoded).__name__}"
+                ),
+                "__status__": resp.status_code,
+                "__kind__": "schema_error",
+            }
+
+            if soft:
+                return result
+
+            raise QuoteCollectionError(
+                f"[pendle_depth] expected a JSON object from {url}, "
+                f"got {type(decoded).__name__}"
+            )
+
+        return decoded
+
+    result = {
+        "__error__": "rate-limited (429) after retries",
+        "__status__": 429,
+        "__kind__": "rate_limited",
+    }
+
     if soft:
-        return {"__error__": "rate-limited (429) after retries", "__status__": 429}
-    sys.exit("[pendle_depth] rate-limited (429) after retries; raise --pause-s and rerun")
+        return result
+
+    raise QuoteCollectionError(
+        "[pendle_depth] rate-limited (429) after retries; "
+        "raise --pause-s and rerun"
+    )
 
 
 def _extract(d: dict[str, Any], *path: str) -> Any:
@@ -196,17 +287,46 @@ def build_depth_curve(
         ) or {}
         amount_out_wei, api_price_impact = _normalise_quote(data, out_token)
         if amount_out_wei is None:
-            why = str(data.get("__error__") or data.get("message") or "no quote")
-            reason = ("rate-limited after retries (raise --pause-s and rerun)"
-                      if "429" in why or "too many requests" in why.lower()
-                      else "no/insufficient route at this size (depth limit)")
-            print(f"[pendle_depth] skip size {size_pt:g} PT: {reason} -- {why}",
-                  file=sys.stderr)
+            routes = data.get("routes")
+
+            # Convert v3 explicitly returning an empty route list is treated as
+            # a genuine absence of executable liquidity at this size.
+            explicit_no_route = (
+                isinstance(routes, list)
+                and len(routes) == 0
+                and "__error__" not in data
+            )
+
+            if explicit_no_route:
+                print(
+                    f"[pendle_depth] skip size {size_pt:g} PT: "
+                    "no executable route at this size (depth limit)",
+                    file=sys.stderr,
+                )
+            else:
+                kind = str(data.get("__kind__") or "schema_error")
+                status = data.get("__status__")
+                why = str(
+                    data.get("__error__")
+                    or data.get("message")
+                    or "response contained no usable output amount"
+                )
+
+                status_text = "" if status is None else f" HTTP {status}"
+
+                raise QuoteCollectionError(
+                    f"[pendle_depth] quote collection aborted at "
+                    f"{size_pt:g} PT: {kind}{status_text}: {why}. "
+                    "This is a technical measurement failure, not a "
+                    "liquidity-depth observation."
+                )
         else:
             exec_price = float(amount_out_wei) / (10 ** out_decimals) / size_pt
             raw.append((size_pt, exec_price, api_price_impact))
         if pause_s:
             time.sleep(pause_s)
+
+    raw.sort(key=lambda item: item[0])
 
     if not raw:
         return [], None
@@ -257,7 +377,12 @@ def main() -> None:
     p.add_argument("--max-size-pt", type=float, required=True,
                    help="largest PT sell size to quote")
     p.add_argument("--steps", type=int, default=25)
-    p.add_argument("--timeout", type=float, default=30.0)
+    p.add_argument(
+        "--timeout",
+        type=float,
+        default=120.0,
+        help="HTTP timeout in seconds; default 120 for Hosted SDK routing",
+    )
     p.add_argument("--pause-s", type=float, default=1.0,
                    help="delay between calls to respect rate limits "
                         "(429s are also retried with exponential back-off)")
