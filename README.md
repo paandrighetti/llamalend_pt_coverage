@@ -42,6 +42,11 @@ If `V_liq(D) > L_stress`, the market is over-sized under the stated assumptions;
 | `pt_susde_aug13_depth.csv` | Near-maturity anchor curve, Pendle-only, v0.2 provenance columns. | n/a |
 | `pt_reusd_dec10_depth.csv` | Far-maturity anchor curve, Pendle-only, v0.2 provenance columns. | n/a |
 | `pt_depth_curve.csv` | Legacy June pull (pre-v0.2, aggregator-routed): kept for history, superseded by the two curves above. | n/a |
+| `estimate_rho.py` | Wrong-way factor estimation: episode and regression estimators on underlying-deviation vs pool-capacity co-movement, honest not-calibratable branch. | `python estimate_rho.py --synthetic` |
+| `fetch_rho_inputs.py` | DefiLlama-fed builder for the rho input series (daily underlying price + pool TVL). | see `--help` |
+| `dune/*.sql` | Three queries: underlying price history, pool TVL history, Pendle market liquidity context (rho protocol and monitoring inputs). | n/a |
+| `rho_inputs.csv`, `rho_inputs_dola.csv`, `rho_wrongway_*.png` | Corrected USDe-series inputs and co-movement charts for the two sampled pools. | n/a |
+| `pt_depth_curve_2.csv`, `make_market2_figs.py`, `coverage_chart_2.png` | **Exploratory** third-regime study (PT-wstETH, long-dated volatile underlying); pre-provenance pull, re-measurement with the v0.2 script planned before any published use. | n/a |
 | `example_depth_curve.csv` | Minimal CSV schema example. | n/a |
 | `coverage_chart.png`, `dstar_vs_rho.png` | Output figures. | n/a |
 
@@ -65,6 +70,7 @@ python run_analysis.py --depth-csv pt_susde_aug13_depth.csv \
     --maturity-years 0.0658 --max-ltv 0.90 --representative-ltv 0.80 \
     --pool-tvl 8321683 --band-drop 0.08 --depeg 0.03 --discount-widen 0.015 \
     --horizon-days 2 --sigma-max 0.02 --maturity-haircut 0.05 --rho 0.5 --underlying-vol 0.10
+python estimate_rho.py --inputs-csv rho_inputs.csv --stress-depeg 0.03   # wrong-way factor report
 python run_analysis.py --depth-csv pt_reusd_dec10_depth.csv \
     --pt-symbol PT-reUSD --underlying-symbol reUSD \
     --maturity-years 0.389 --max-ltv 0.90 --representative-ltv 0.80 \
