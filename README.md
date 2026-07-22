@@ -34,10 +34,10 @@ If `V_liq(D) > L_stress`, the market is over-sized under the stated assumptions;
 | `run_analysis.py` | CLI: load depth curve, produce report + chart. | No |
 | `synthetic.py` | Synthetic depth curve to demo the pipeline. **Illustrative only.** | No |
 | `discover_market.py` | Lists active Pendle markets matching a name and prints a ready-to-paste `pendle_depth.py` command with the correct addresses. | **Yes (Pendle API)** |
-| `pendle_depth.py` | Retrieval: builds the REAL PT price-impact curve from Pendle API swap quotes. | **Yes (Pendle API)** |
+| `pendle_depth.py` | Retrieval: builds an observed PT price-impact curve from Pendle Hosted SDK quotes. | **Yes (Pendle API)** |
 | `dune/underlying_price_history.sql` | Underlying price history: stress depeg + rho calibration. | Run on Dune |
 | `dune/pendle_pt_liquidity_context.sql` | Pendle market liquidity context over time: rho. | Run on Dune |
-| `tests/test_coverage_model.py` | Unit tests (run: `python tests/test_coverage_model.py`). | No |
+| `tests/` | Unit and publication-data tests (run: `python -m pytest -q`). | No |
 | `governance/ForumPost_LlamaLend_PT.md` | The governance research post published on gov.curve.finance. | n/a |
 | `pt_susde_aug13_depth.csv` | Near-maturity anchor curve, Pendle-only, v0.2 provenance columns. | n/a |
 | `pt_reusd_dec10_depth.csv` | Far-maturity anchor curve, Pendle-only, v0.2 provenance columns. | n/a |
@@ -56,10 +56,10 @@ If `V_liq(D) > L_stress`, the market is over-sized under the stated assumptions;
 pip install -r requirements.txt
 
 # 1) Verify the engine and run an illustrative demo (no network):
-python tests/test_coverage_model.py
+python -m pytest -q
 python run_analysis.py --synthetic          # writes coverage_chart.png
 
-# 2) Find a market and pull a REAL depth curve (needs Pendle API access).
+# 2) Find a market and pull an observed depth curve (needs Pendle API access).
 #    discover_market.py prints a ready-to-paste pendle_depth.py command
 #    with the correct market, PT, and out-token addresses:
 python discover_market.py --query sUSDe --receiver 0xYourEOA
@@ -79,7 +79,7 @@ python run_analysis.py --depth-csv pt_reusd_dec10_depth.csv \
 # Legacy June curve (pre-v0.2, aggregator-routed), illustrative only, kept for history
 ```
 
-## The three real inputs (and where to get them)
+## The three empirical inputs (and where to get them)
 
 1. **Depth / slippage curve**: `pendle_depth.py` (Pendle Hosted SDK swap quotes
    over a grid of sizes). This is the load-bearing input.
@@ -101,7 +101,7 @@ The ceiling D* is an indicative figure under stated assumptions, not a guarantee
 ## Limitations
 
 * **`synthetic.py` is illustrative only.** No number in the accompanying
-  analysis derives from it; every published figure comes from real retrieval
+  analysis derives from it; every published figure comes from an empirical retrieval
   (the governance curves `pt_susde_aug13_depth.csv` and
   `pt_reusd_dec10_depth.csv`; the legacy June curve `pt_depth_curve.csv` is
   retained for history only).
@@ -118,8 +118,11 @@ The ceiling D* is an indicative figure under stated assumptions, not a guarantee
   is a depth-agnostic stand-in to make the comparison concrete; the contribution
   is the *method* and the *relative* result (does execution bind tighter?), not
   that specific number.
-* **API drift.** Pendle and Dune routes change; `pendle_depth.py` fails loudly on
-  a schema mismatch. Verify against current Pendle API docs.
+* **API drift.** The current collector uses Pendle's recommended v3 Convert
+  endpoint and validates its response shape. The two governance-anchor CSVs are
+  retained snapshots collected through the earlier market-specific swap endpoint;
+  their quote values are not silently rewritten when the collector changes. Verify
+  current routes against Pendle's official API documentation before a fresh pull.
 
 ---
 
@@ -141,7 +144,6 @@ p.a.andrighetti@gmail.com
 
 ## Depth measurement notes
 
-`pendle_depth.py` v0.2 quotes with aggregator routing disabled by default (`--enable-aggregator` to opt in), enforces a unit-consistent USD spot sanity check on the smallest execution (use `--out-token-usd-price` when the output token is not at par), and writes provenance columns (timestamp, chain, market, addresses, API base, routing mode) into the CSV. The sUSDe governance curve is included as a v0.2 Pendle-only pull with provenance columns. The original reUSD CSV must be added separately before claiming full two-anchor reproducibility. The legacy `pt_depth_curve.csv` (June, pre-v0.2, aggregator-routed) is kept for history and superseded.
 
 ## License
 

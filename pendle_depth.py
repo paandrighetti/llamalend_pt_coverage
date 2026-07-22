@@ -1,5 +1,5 @@
 """
-Retrieve a REAL PT secondary-liquidity depth curve from the Pendle Hosted SDK.
+Retrieve an observed PT secondary-liquidity depth curve from the Pendle Hosted SDK.
 
 WHY AN API AND NOT A HAND-ROLLED AMM
 ------------------------------------
@@ -15,13 +15,13 @@ IMPORTANT
 ---------
 * This script needs outbound internet access to the Pendle API. It will NOT run
   inside a restricted sandbox.
-* Pendle API routes/params drift. VERIFY the current schema against
-  https://api-v2.pendle.finance/core/docs before trusting output. The script
-  fails loudly (prints the raw response) if the schema does not match.
+* Pendle API routes and schemas can change. Verify the current Hosted SDK
+  documentation before a fresh pull. The script prints a clear error if the
+  expected response shape is not present.
 * A built-in sanity check verifies that the smallest-size execution price matches
   the quoted spot/asset price within tolerance; if it fails, do not use the curve.
 
-Output: a CSV with columns [size_usd, impact] consumable by run_analysis.py.
+Output: a provenance-bearing CSV consumable by run_analysis.py.
 """
 from __future__ import annotations
 
@@ -36,27 +36,32 @@ import requests
 DEFAULT_BASE_URL = "https://api-v2.pendle.finance/core"
 
 
-def _get(url: str, params: dict[str, Any], timeout: float,
-         soft: bool = False, max_retries: int = 5) -> dict[str, Any] | None:
+def _post(
+    url: str,
+    payload: dict[str, Any],
+    timeout: float,
+    soft: bool = False,
+    max_retries: int = 5,
+) -> dict[str, Any] | None:
+    """POST JSON with the same retry/error contract as :func:`_get`."""
     delay = 2.0
     for attempt in range(max_retries + 1):
         try:
-            resp = requests.get(url, params=params, timeout=timeout)
+            resp = requests.post(url, json=payload, timeout=timeout)
         except requests.RequestException as e:
             if soft:
                 return {"__error__": f"request failed: {e}"}
             sys.exit(f"[pendle_depth] request failed for {url}: {e}")
-        # rate limited: back off and retry rather than dropping the size
         if resp.status_code == 429 and attempt < max_retries:
             time.sleep(delay)
             delay = min(delay * 2, 30.0)
             continue
         if resp.status_code != 200:
-            payload = {"__error__": resp.text[:300], "__status__": resp.status_code}
+            result = {"__error__": resp.text[:300], "__status__": resp.status_code}
             if soft:
-                return payload
+                return result
             sys.exit(
-                f"[pendle_depth] HTTP {resp.status_code} for {resp.url}\n"
+                f"[pendle_depth] HTTP {resp.status_code} for {url}\n"
                 f"Response: {resp.text[:1000]}"
             )
         try:
@@ -64,7 +69,7 @@ def _get(url: str, params: dict[str, Any], timeout: float,
         except ValueError:
             if soft:
                 return {"__error__": "non-JSON response"}
-            sys.exit(f"[pendle_depth] non-JSON response for {resp.url}:\n{resp.text[:1000]}")
+            sys.exit(f"[pendle_depth] non-JSON response for {url}:\n{resp.text[:1000]}")
     if soft:
         return {"__error__": "rate-limited (429) after retries", "__status__": 429}
     sys.exit("[pendle_depth] rate-limited (429) after retries; raise --pause-s and rerun")
@@ -95,28 +100,55 @@ def fetch_swap_quote(
     enable_aggregator: bool,
     timeout: float,
     soft: bool = False,
+    use_limit_order: bool = False,
 ) -> dict[str, Any] | None:
     """
-    Single swap quote (exact-in: sell `amount_in_wei` of token_in for token_out).
+    Request an exact-input quote through Pendle's recommended v3 Convert API.
 
-    Endpoint shape (verify against current docs):
-        GET {base}/v2/sdk/{chainId}/markets/{market}/swap
-            ?tokenIn=&tokenOut=&amountIn=&receiver=&slippage=
+    The Convert API identifies the action from the input and output token
+    addresses. ``market`` is retained in this function signature for provenance
+    and backwards-compatible callers; the universal endpoint does not accept a
+    market parameter. ``use_limit_order`` defaults to false so the published
+    curve measures AMM/router capacity rather than order-book liquidity.
     """
-    url = f"{base_url}/v2/sdk/{chain_id}/markets/{market}/swap"
-    params = {
-        "tokenIn": token_in,
-        "tokenOut": token_out,
-        "amountIn": str(amount_in_wei),
+    del market
+    url = f"{base_url}/v3/sdk/{chain_id}/convert"
+    payload: dict[str, Any] = {
         "receiver": receiver,
-        "slippage": "0.99",          # permissive; we read the quote, not execute
-        # Off by default: with the aggregator enabled a quote may route through
-        # external venues, so the curve would measure ecosystem-executable depth
-        # rather than Pendle-only routing. Enable explicitly if that is what you
-        # want to measure, and say so wherever you publish the curve.
-        "enableAggregator": "true" if enable_aggregator else "false",
+        "slippage": 0.01,
+        "enableAggregator": enable_aggregator,
+        "inputs": [{"token": token_in, "amount": str(amount_in_wei)}],
+        "outputs": [token_out],
+        "useLimitOrder": use_limit_order,
     }
-    return _get(url, params, timeout, soft=soft)
+    return _post(url, payload, timeout, soft=soft)
+
+
+def _normalise_quote(
+    response: dict[str, Any], expected_token_out: str
+) -> tuple[str | None, float | None]:
+    """Return ``(amount_out_wei, api_price_impact)`` from Convert or legacy data."""
+    routes = response.get("routes")
+    if isinstance(routes, list) and routes:
+        route = routes[0] if isinstance(routes[0], dict) else {}
+        outputs = route.get("outputs") or []
+        selected: dict[str, Any] | None = None
+        for output in outputs:
+            if not isinstance(output, dict):
+                continue
+            if str(output.get("token", "")).lower() == expected_token_out.lower():
+                selected = output
+                break
+        if selected is None and len(outputs) == 1 and isinstance(outputs[0], dict):
+            selected = outputs[0]
+        amount = None if selected is None else selected.get("amount")
+        data = route.get("data") if isinstance(route.get("data"), dict) else {}
+        return (None if amount is None else str(amount), data.get("priceImpact"))
+
+    # Backwards-compatible parser for archived fixtures and earlier API responses.
+    block = response.get("data") if isinstance(response.get("data"), dict) else {}
+    amount = block.get("amountOut")
+    return (None if amount is None else str(amount), block.get("priceImpact"))
 
 
 def build_depth_curve(
@@ -134,6 +166,7 @@ def build_depth_curve(
     pause_s: float,
     enable_aggregator: bool = False,
     out_token_usd_price: float = 1.0,
+    use_limit_order: bool = False,
 ) -> tuple[list[tuple], float | None]:
     """
     Quote token_out for each PT sell size and build a size-driven slippage curve.
@@ -159,9 +192,9 @@ def build_depth_curve(
             token_in=pt_address, token_out=out_token,
             amount_in_wei=amount_in_wei, receiver=receiver,
             enable_aggregator=enable_aggregator, timeout=timeout, soft=True,
+            use_limit_order=use_limit_order,
         ) or {}
-        block = data.get("data") or {}
-        amount_out_wei = block.get("amountOut")
+        amount_out_wei, api_price_impact = _normalise_quote(data, out_token)
         if amount_out_wei is None:
             why = str(data.get("__error__") or data.get("message") or "no quote")
             reason = ("rate-limited after retries (raise --pause-s and rerun)"
@@ -171,7 +204,7 @@ def build_depth_curve(
                   file=sys.stderr)
         else:
             exec_price = float(amount_out_wei) / (10 ** out_decimals) / size_pt
-            raw.append((size_pt, exec_price, block.get("priceImpact")))
+            raw.append((size_pt, exec_price, api_price_impact))
         if pause_s:
             time.sleep(pause_s)
 
@@ -231,7 +264,10 @@ def main() -> None:
     p.add_argument("--out-csv", default="pt_depth_curve.csv")
     p.add_argument("--enable-aggregator", action="store_true",
                    help="allow routing through external aggregators; default off "
-                        "so the curve measures Pendle-only routing")
+                        "so the curve measures Pendle-native routing")
+    p.add_argument("--use-limit-order", action="store_true",
+                   help="include Pendle limit-order liquidity; default off so the "
+                        "curve isolates AMM/router capacity")
     p.add_argument("--spot-tolerance", type=float, default=0.03,
                    help="max relative gap between smallest exec price and --spot-price")
     p.add_argument("--allow-spot-mismatch", action="store_true",
@@ -256,6 +292,7 @@ def main() -> None:
         args.receiver, args.pt_decimals, args.out_decimals, args.spot_price,
         sizes, args.timeout, args.pause_s, args.enable_aggregator,
         out_token_usd_price=args.out_token_usd_price,
+        use_limit_order=args.use_limit_order,
     )
     if not rows:
         sys.exit(
@@ -282,14 +319,17 @@ def main() -> None:
     import datetime as _dt
     prov = [_dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
             args.chain_id, args.market, args.pt_address, args.out_token,
-            args.base_url, str(args.enable_aggregator).lower(), args.spot_price,
+            args.base_url, "v3_convert_post",
+            str(args.enable_aggregator).lower(),
+            str(args.use_limit_order).lower(), 0.01, args.spot_price,
             args.out_token_usd_price]
     with open(args.out_csv, "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["size_usd", "impact", "api_price_impact",
                     "ts_utc", "chain_id", "market", "pt_address", "out_token",
-                    "api_base", "aggregator_enabled", "spot_price_arg",
-                    "out_token_usd_price_arg"])
+                    "api_base", "api_route", "aggregator_enabled",
+                    "limit_order_enabled", "slippage_tolerance",
+                    "spot_price_arg", "out_token_usd_price_arg"])
         w.writerows([list(r) + prov for r in rows])
     print(f"[pendle_depth] wrote {len(rows)} rows to {args.out_csv}")
 

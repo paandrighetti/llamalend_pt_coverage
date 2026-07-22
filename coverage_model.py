@@ -25,7 +25,7 @@ horizon logic to on-chain lending:
 
 D* is an INDICATIVE ceiling under the stated assumptions, not a guarantee.
 
-SCOPE AND ASSUMPTIONS (v0.1)
+SCOPE AND ASSUMPTIONS (v0.2)
 ----------------------------
 * Static coverage constraint, not a simulation. There is no dynamic model of
   LLAMMA band traversal, oracle path, arbitrage, or de-liquidation.

@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.2.1 (2026-07-22)
+
+- Migrated fresh quote retrieval to Pendle's recommended v3 Convert POST endpoint.
+- Corrected the slippage parameter to `0.01` for a one-percent tolerance and added an explicit `--use-limit-order` opt-in.
+- Preserved the two governance-anchor CSVs as dated historical snapshots rather than rewriting them after an API migration.
+- Added tests for the v3 request payload, response normalisation, complete quote failure, output-token USD conversion and published CSV presence.
+- Expanded continuous integration to Python 3.10-3.13 and the full pytest suite.
+- Removed the stale README note that the reUSD CSV still needed to be added.
+
 ## v0.2 (2026-07-19/20)
 
 - Measured-provenance CSVs: timestamp, chain, market, addresses, API

@@ -134,11 +134,11 @@ def main() -> None:
     print(f"Absorbable @ sigma_max (calm)  L_raw : {_fmt(l_raw)}")
     print(f"Stressed absorbable          L_stress: {_fmt(l_stress)}")
     print("=" * 72)
-    print(f"SAFE DEBT CEILING  D*  (central)     : {_fmt(d_star)}")
-    print(f"SAFE DEBT CEILING  D*  (conservative): {_fmt(d_star_cons)}")
+    print(f"SCENARIO-IMPLIED CEILING D* (central)     : {_fmt(d_star)}")
+    print(f"SCENARIO-IMPLIED CEILING D* (conservative): {_fmt(d_star_cons)}")
     print(f"Depth-agnostic heuristic ceiling     : {_fmt(benchmark)}  (illustrative)")
     print(f"  -> coverage ratio AT that ceiling  : {cr_at_benchmark:.2f}  "
-          f"({'UNSAFE: CR<1' if cr_at_benchmark < 1 else 'ok'})")
+          f"({'CR<1 under scenario' if cr_at_benchmark < 1 else 'CR>=1'})")
     if benchmark > 0:
         print(f"  -> D* (central) is {d_star/benchmark:.1%} of the heuristic ceiling")
     print("=" * 72)
