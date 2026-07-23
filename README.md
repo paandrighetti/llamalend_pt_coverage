@@ -48,7 +48,7 @@ If `V_liq(D) > L_stress`, the market is over-sized under the stated assumptions;
 | `rho_inputs.csv`, `rho_inputs_dola.csv`, `rho_wrongway_*.png` | Corrected USDe-series inputs and co-movement charts for the two sampled pools. | n/a |
 | `data/exploratory/pt_depth_curve_2.csv`, `make_market2_figs.py`, `coverage_chart_2.png` | **Exploratory** third-regime study (PT-wstETH, long-dated volatile underlying); pre-provenance pull, re-measurement with the v0.2 script planned before any published use. | n/a |
 | `examples/example_depth_curve.csv` | Minimal CSV schema example. | n/a |
-| `coverage_chart.png`, `dstar_vs_rho.png` | Output figures. | n/a |
+| `coverage_chart.png`, `coverage_chart_reusd.png` | Canonical output figures for the two publication anchors. | n/a |
 
 Publication curves require adjacent `.manifest.json` files. `run_analysis.py` verifies the SHA-256 hash and rejects unmanifested data unless `--allow-nonpublication-data` is passed explicitly for legacy or exploratory work.
 

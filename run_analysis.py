@@ -7,7 +7,7 @@ Examples
 python run_analysis.py --synthetic
 
 # Real analysis once you have a curve from pendle_depth.py:
-python run_analysis.py --depth-csv pt_depth_curve.csv \
+python run_analysis.py --depth-csv pt_susde_aug13_depth.csv \
     --maturity-years 0.5 --max-ltv 0.90 --representative-ltv 0.80 \
     --pool-tvl 100e6 --band-drop 0.08 \
     --depeg 0.03 --discount-widen 0.04 --horizon-days 2 \
