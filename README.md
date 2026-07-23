@@ -144,7 +144,6 @@ If this toolkit informs your research or analysis, please cite:
 ## Contact
 
 https://www.linkedin.com/in/pierre-antoine-andrighetti
-https://x.com/bandulf
 p.a.andrighetti@gmail.com
 
 ---
