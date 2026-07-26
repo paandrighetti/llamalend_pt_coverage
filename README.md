@@ -1,6 +1,6 @@
 # LlamaLend PT Debt Ceilings: a Liquidity-Coverage Toolkit
 
-Sizing Pendle Principal Token (PT) debt ceilings in Curve LlamaLend from **soft-liquidation capacity** under correlated stress. Companion code to a governance research contribution on gov.curve.finance. The retained executable quote snapshots were measured on 20 July 2026 for PT-sUSDe (maturing 13 August 2026) and 21 July 2026 for PT-reUSD (maturing 10 December 2026); pool-context inputs were collected around 19 July 2026.
+Sizing Pendle Principal Token (PT) debt ceilings in Curve LlamaLend from **soft-liquidation capacity** under correlated stress. Companion code to a governance research contribution prepared for gov.curve.finance. The retained executable quote snapshots were measured on 20 July 2026 for PT-sUSDe (maturing 13 August 2026) and 21 July 2026 for PT-reUSD (maturing 10 December 2026); pool-context inputs were collected around 19 July 2026.
 
 ## The idea in one paragraph
 
@@ -38,14 +38,12 @@ If `V_liq(D) > L_stress`, the market is over-sized under the stated assumptions;
 | `dune/underlying_price_history.sql` | Underlying price history: stress depeg + rho calibration. | Run on Dune |
 | `dune/pendle_pt_liquidity_context.sql` | Pendle market liquidity context over time: rho. | Run on Dune |
 | `tests/` | Unit and publication-data tests (run: `python -m pytest -q`). | No |
-| `governance/ForumPost_LlamaLend_PT.md` | The governance research post published on gov.curve.finance. | n/a |
+| `governance/ForumPost_LlamaLend_PT.md` | The governance research post prepared for gov.curve.finance. | n/a |
 | `pt_susde_aug13_depth.csv` | Near-maturity anchor curve, Pendle-only, v0.2 provenance columns. | n/a |
 | `pt_reusd_dec10_depth.csv` | Far-maturity anchor curve, Pendle-only, v0.2 provenance columns. | n/a |
 | `data/legacy/pt_depth_curve.csv` | Legacy June pull (pre-v0.2, aggregator-routed): kept for history, superseded by the two curves above. | n/a |
 | `estimate_rho.py` | Wrong-way factor estimation: episode and regression estimators on underlying-deviation vs pool-capacity co-movement, explicit not-calibratable outcome. | `python estimate_rho.py --synthetic` |
 | `fetch_rho_inputs.py` | DefiLlama-fed builder for the rho input series (daily underlying price + pool TVL). | see `--help` |
-| `dune/*.sql` | Three queries: underlying price history, pool TVL history, Pendle market liquidity context (rho protocol and monitoring inputs). | n/a |
-| `estimate_rho.py`, `fetch_rho_inputs.py` | Calibration protocol for a valid unstaked-USDe price series and a matched liquidity-capacity series. No empirical rho estimate is claimed from retained inputs in this release. | see `--help` |
 | `examples/example_depth_curve.csv` | Minimal CSV schema example. | n/a |
 | `coverage_chart.png`, `coverage_chart_reusd.png` | Canonical output figures for the two publication anchors. | n/a |
 
@@ -93,7 +91,7 @@ python run_analysis.py --depth-csv data/legacy/pt_depth_curve.csv \
    over a grid of sizes). This is the load-bearing input.
 2. **Stress calibration** (`--depeg`, `--discount-widen`): from the underlying's
    worst historical deviation and the PT discount history (`dune/underlying_price_history.sql`).
-3. **Wrong-way factor** (`--rho`): from the co-movement of the unstaked underlying\'s deviation
+3. **Wrong-way factor** (`--rho`): from the co-movement of the unstaked underlying's deviation
    and PT depth (both Dune queries). This release does not retain a valid empirical
    USDe calibration series, so `rho` is presented only as a forward sensitivity input.
 
