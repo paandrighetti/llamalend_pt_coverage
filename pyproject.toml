@@ -4,13 +4,29 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llamalend-pt-coverage"
-version = "0.2.1"
+version = "0.2.3"
 description = "Liquidity coverage toolkit for sizing Pendle PT debt ceilings in LlamaLend v2 under correlated stress"
 requires-python = ">=3.10,<3.14"
 dependencies = ["numpy>=1.24", "pandas>=2.0", "matplotlib>=3.7", "requests>=2.31"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.2"]
+
+[tool.setuptools]
+py-modules = [
+    "build_depth_manifest",
+    "coverage_model",
+    "discover_defillama_pool",
+    "discover_market",
+    "estimate_rho",
+    "fetch_rho_inputs",
+    "make_comparison_chart",
+    "make_comparison_fig",
+    "make_market2_figs",
+    "pendle_depth",
+    "run_analysis",
+    "synthetic",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

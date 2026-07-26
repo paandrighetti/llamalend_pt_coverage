@@ -2,7 +2,7 @@
 discover_market.py
 ===================
 List ACTIVE Pendle markets matching a name (e.g. "sUSDe") and, for each match,
-print a ready-to-paste `pendle_depth.py` command plus the `run_analysis.py`
+print a complete `pendle_depth.py` command plus the `run_analysis.py`
 parameters (maturity-years, pool-tvl). This removes the need to read addresses
 off the Pendle UI by hand.
 

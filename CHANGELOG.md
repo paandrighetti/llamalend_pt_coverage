@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.2.3 (2026-07-26)
+
+- Reconciled the governance-post ceiling table with the current v0.2 engine and retained publication manifests.
+- Distinguished the 19 July market-context date from the 20 and 21 July executable quote snapshots.
+- Reframed rho in [0.3, 0.5] as an uncalibrated forward sensitivity band for the included samples.
+- Prevented synthetic and multi-market runs from silently overwriting the same default chart.
+- Added CI smoke analyses for both publication-anchor curves and repository-hygiene checks.
+- Regenerated the canonical PT-sUSDe and PT-reUSD charts from their adjacent verified manifests.
+
 ## v0.2.2 (2026-07-22)
 
 - Distinguished explicit empty-route responses from technical API failures.

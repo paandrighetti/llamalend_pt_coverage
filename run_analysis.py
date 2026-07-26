@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 
 import matplotlib
@@ -184,7 +185,14 @@ def main() -> None:
     p.add_argument("--rho", type=float, default=0.5)
     p.add_argument("--underlying-vol", type=float, default=0.10)
 
-    p.add_argument("--chart", default="coverage_chart.png")
+    p.add_argument(
+        "--chart",
+        default=None,
+        help=(
+            "output PNG path; defaults to coverage_chart_synthetic.png for "
+            "synthetic runs and a PT-symbol-specific name for empirical runs"
+        ),
+    )
     args = p.parse_args()
 
     market = MarketParams(
@@ -208,6 +216,14 @@ def main() -> None:
     )
 
     depth, is_synth = load_depth(args)
+    if args.chart is None:
+        if is_synth:
+            chart_path = Path("coverage_chart_synthetic.png")
+        else:
+            slug = re.sub(r"[^a-z0-9]+", "_", args.pt_symbol.lower()).strip("_")
+            chart_path = Path(f"coverage_chart_{slug}.png")
+    else:
+        chart_path = Path(args.chart)
 
     l_stress = stressed_liquidity(depth, adj)
     l_raw = depth.max_volume_at_slippage(adj.sigma_max)
@@ -277,8 +293,8 @@ def main() -> None:
     ax.grid(True, which="both", alpha=0.25)
     ax.legend(fontsize=8, loc="upper right")
     fig.tight_layout()
-    fig.savefig(args.chart, dpi=140)
-    print(f"[run_analysis] chart written to {args.chart}")
+    fig.savefig(chart_path, dpi=140)
+    print(f"[run_analysis] chart written to {chart_path}")
 
 
 if __name__ == "__main__":
