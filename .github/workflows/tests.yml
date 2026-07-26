@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -25,10 +28,18 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
+      - name: Reject generated Python artifacts
+        shell: bash
+        run: |
+          if git ls-files | grep -E '(^|/)__pycache__/|\.py[co]$'; then
+            echo "Tracked Python cache artifacts are not allowed."
+            exit 1
+          fi
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt pytest
+          python -m pip install -e ".[dev]"
 
       - name: Run full test suite
         run: python -m pytest -q
@@ -51,3 +62,47 @@ jobs:
           --maturity-haircut 0.15
           --rho 0.5
           --chart /tmp/smoke.png
+
+      - name: Verify PT-sUSDe publication anchor
+        env:
+          MPLBACKEND: Agg
+        run: >
+          python run_analysis.py
+          --depth-csv pt_susde_aug13_depth.csv
+          --pt-symbol PT-sUSDe
+          --underlying-symbol sUSDe
+          --maturity-years 0.0658
+          --max-ltv 0.90
+          --representative-ltv 0.80
+          --pool-tvl 8321683
+          --band-drop 0.08
+          --depeg 0.03
+          --discount-widen 0.015
+          --horizon-days 2
+          --sigma-max 0.02
+          --maturity-haircut 0.05
+          --rho 0.5
+          --underlying-vol 0.10
+          --chart /tmp/pt_susde.png
+
+      - name: Verify PT-reUSD publication anchor
+        env:
+          MPLBACKEND: Agg
+        run: >
+          python run_analysis.py
+          --depth-csv pt_reusd_dec10_depth.csv
+          --pt-symbol PT-reUSD
+          --underlying-symbol reUSD
+          --maturity-years 0.389
+          --max-ltv 0.90
+          --representative-ltv 0.80
+          --pool-tvl 7568508
+          --band-drop 0.08
+          --depeg 0.03
+          --discount-widen 0.015
+          --horizon-days 2
+          --sigma-max 0.02
+          --maturity-haircut 0.15
+          --rho 0.5
+          --underlying-vol 0.10
+          --chart /tmp/pt_reusd.png

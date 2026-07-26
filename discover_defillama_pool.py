@@ -3,7 +3,7 @@ discover_defillama_pool.py
 ==========================
 List DefiLlama yield pools matching a symbol (and optional project), printing the
 pool UUID + current TVL so you can pick a capacity proxy for estimate_rho. Emits
-the ready-to-paste fetch_rho_inputs.py command for each.
+the complete fetch_rho_inputs.py command for each.
 
 Run (needs internet to DefiLlama):
     python discover_defillama_pool.py --symbol USDe --project curve

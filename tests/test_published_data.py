@@ -38,6 +38,13 @@ class PublishedCurveTests(unittest.TestCase):
                 self.assertGreater(sizes[-1], sizes[0])
                 self.assertTrue(all(value >= 0.0 for value in impacts))
 
+    def test_canonical_charts_are_present_and_distinct(self):
+        near = ROOT / "coverage_chart.png"
+        far = ROOT / "coverage_chart_reusd.png"
+        self.assertTrue(near.exists())
+        self.assertTrue(far.exists())
+        self.assertNotEqual(near.read_bytes(), far.read_bytes())
+
 
 if __name__ == "__main__":
     unittest.main()

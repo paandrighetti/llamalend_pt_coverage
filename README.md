@@ -1,6 +1,6 @@
 # LlamaLend PT Debt Ceilings: a Liquidity-Coverage Toolkit
 
-Sizing Pendle Principal Token (PT) debt ceilings in Curve LlamaLend from **soft-liquidation capacity** under correlated stress. Companion code to a governance research contribution on gov.curve.finance (empirical anchors, measured 19 July 2026: PT-sUSDe maturing 13 August 2026 and PT-reUSD maturing 10 December 2026).
+Sizing Pendle Principal Token (PT) debt ceilings in Curve LlamaLend from **soft-liquidation capacity** under correlated stress. Companion code to a governance research contribution on gov.curve.finance. The retained executable quote snapshots were measured on 20 July 2026 for PT-sUSDe (maturing 13 August 2026) and 21 July 2026 for PT-reUSD (maturing 10 December 2026); pool-context inputs were collected around 19 July 2026.
 
 ## The idea in one paragraph
 
@@ -33,7 +33,7 @@ If `V_liq(D) > L_stress`, the market is over-sized under the stated assumptions;
 | `coverage_model.py` | Core math: V_liq, L_stress, CR, D*, benchmark. Pure, typed, tested. | No |
 | `run_analysis.py` | CLI: load depth curve, produce report + chart. | No |
 | `synthetic.py` | Synthetic depth curve to demo the pipeline. **Illustrative only.** | No |
-| `discover_market.py` | Lists active Pendle markets matching a name and prints a ready-to-paste `pendle_depth.py` command with the correct addresses. | **Yes (Pendle API)** |
+| `discover_market.py` | Lists active Pendle markets matching a name and prints a complete `pendle_depth.py` command with the correct addresses. | **Yes (Pendle API)** |
 | `pendle_depth.py` | Retrieval: builds an observed PT price-impact curve from Pendle Hosted SDK quotes. | **Yes (Pendle API)** |
 | `dune/underlying_price_history.sql` | Underlying price history: stress depeg + rho calibration. | Run on Dune |
 | `dune/pendle_pt_liquidity_context.sql` | Pendle market liquidity context over time: rho. | Run on Dune |
@@ -42,7 +42,7 @@ If `V_liq(D) > L_stress`, the market is over-sized under the stated assumptions;
 | `pt_susde_aug13_depth.csv` | Near-maturity anchor curve, Pendle-only, v0.2 provenance columns. | n/a |
 | `pt_reusd_dec10_depth.csv` | Far-maturity anchor curve, Pendle-only, v0.2 provenance columns. | n/a |
 | `data/legacy/pt_depth_curve.csv` | Legacy June pull (pre-v0.2, aggregator-routed): kept for history, superseded by the two curves above. | n/a |
-| `estimate_rho.py` | Wrong-way factor estimation: episode and regression estimators on underlying-deviation vs pool-capacity co-movement, honest not-calibratable branch. | `python estimate_rho.py --synthetic` |
+| `estimate_rho.py` | Wrong-way factor estimation: episode and regression estimators on underlying-deviation vs pool-capacity co-movement, explicit not-calibratable outcome. | `python estimate_rho.py --synthetic` |
 | `fetch_rho_inputs.py` | DefiLlama-fed builder for the rho input series (daily underlying price + pool TVL). | see `--help` |
 | `dune/*.sql` | Three queries: underlying price history, pool TVL history, Pendle market liquidity context (rho protocol and monitoring inputs). | n/a |
 | `rho_inputs.csv`, `rho_inputs_dola.csv`, `rho_wrongway_*.png` | Corrected USDe-series inputs and co-movement charts for the two sampled pools. | n/a |
@@ -59,10 +59,10 @@ python -m pip install -e ".[dev]"
 
 # 1) Verify the engine and run an illustrative demo (no network):
 python -m pytest -q
-python run_analysis.py --synthetic          # writes coverage_chart.png
+python run_analysis.py --synthetic --chart coverage_chart_synthetic.png
 
 # 2) Find a market and pull an observed depth curve (needs Pendle API access).
-#    discover_market.py prints a ready-to-paste pendle_depth.py command
+#    discover_market.py prints a complete pendle_depth.py command
 #    with the correct market, PT, and out-token addresses:
 python discover_market.py --query sUSDe --receiver 0xYourEOA
 
@@ -71,13 +71,15 @@ python run_analysis.py --depth-csv pt_susde_aug13_depth.csv \
     --pt-symbol PT-sUSDe --underlying-symbol sUSDe \
     --maturity-years 0.0658 --max-ltv 0.90 --representative-ltv 0.80 \
     --pool-tvl 8321683 --band-drop 0.08 --depeg 0.03 --discount-widen 0.015 \
-    --horizon-days 2 --sigma-max 0.02 --maturity-haircut 0.05 --rho 0.5 --underlying-vol 0.10
+    --horizon-days 2 --sigma-max 0.02 --maturity-haircut 0.05 --rho 0.5 --underlying-vol 0.10 \
+    --chart coverage_chart.png
 python estimate_rho.py --inputs-csv rho_inputs.csv --stress-depeg 0.03   # wrong-way factor report
 python run_analysis.py --depth-csv pt_reusd_dec10_depth.csv \
     --pt-symbol PT-reUSD --underlying-symbol reUSD \
     --maturity-years 0.389 --max-ltv 0.90 --representative-ltv 0.80 \
     --pool-tvl 7568508 --band-drop 0.08 --depeg 0.03 --discount-widen 0.015 \
-    --horizon-days 2 --sigma-max 0.02 --maturity-haircut 0.15 --rho 0.5 --underlying-vol 0.10
+    --horizon-days 2 --sigma-max 0.02 --maturity-haircut 0.15 --rho 0.5 --underlying-vol 0.10 \
+    --chart coverage_chart_reusd.png
 # Legacy June curve (pre-v0.2, aggregator-routed), illustrative only:
 python run_analysis.py --depth-csv data/legacy/pt_depth_curve.csv \
     --allow-nonpublication-data --maturity-years 0.5 --max-ltv 0.90 \

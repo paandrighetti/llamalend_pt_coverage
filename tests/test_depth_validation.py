@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 
@@ -9,7 +8,11 @@ import pandas as pd
 import pytest
 
 from coverage_model import DepthCurve
-from run_analysis import validate_and_prepare_depth_frame, validate_publication_manifest
+from run_analysis import (
+    canonical_file_sha256,
+    validate_and_prepare_depth_frame,
+    validate_publication_manifest,
+)
 
 
 @pytest.mark.parametrize(
@@ -50,10 +53,13 @@ def test_large_monotonic_adjustment_is_rejected() -> None:
 
 def test_publication_manifest_hash_is_verified(tmp_path: Path) -> None:
     csv_path = tmp_path / "curve.csv"
-    csv_path.write_text("size_usd,impact\n1,0\n2,0.01\n", encoding="utf-8")
+    csv_path.write_bytes(b"size_usd,impact\r\n1,0\r\n2,0.01\r\n")
     manifest = {
         "publication_ready": True,
-        "sha256": hashlib.sha256(csv_path.read_bytes()).hexdigest(),
+        "sha256": canonical_file_sha256(csv_path),
     }
-    csv_path.with_suffix(".manifest.json").write_text(json.dumps(manifest))
+    csv_path.with_suffix(".manifest.json").write_text(
+        json.dumps(manifest),
+        encoding="utf-8",
+    )
     assert validate_publication_manifest(csv_path, False) is not None

@@ -2,7 +2,7 @@
 
 *Independent contribution. All figures measured 19-21 July 2026 with the published toolkit, Pendle-only routing, provenance columns in the repository CSVs.*
 
-**TL;DR.** Pricing PTs is largely solved (ELB and related oracles); executing a stressed unwind through LLAMMA is not. This post transposes the Liquidity Coverage Ratio logic to soft-liquidation: a PT market's debt ceiling should be covered by stress-contracted, Pendle-only exit depth over the liquidation horizon. Measured on two live maturities (19 July 2026), execution capacity is regime-dependent: a hard proportion cap near maturity, gradual slippage further out. Under correlated stress (ρ in [0.3, 0.5]) the resulting ceilings sit well below displayed TVL on both anchors; per-market figures in section 4. Method, code, curves and provenance are open-source.
+**TL;DR.** Pricing PTs is largely solved (ELB and related oracles); executing a stressed unwind through LLAMMA is not. This post transposes the Liquidity Coverage Ratio logic to soft-liquidation: a PT market's debt ceiling should be covered by stress-contracted, Pendle-only exit depth over the liquidation horizon. Measured on two live maturities using quote snapshots from 20 and 21 July 2026, execution capacity is regime-dependent: a hard proportion cap near maturity, gradual slippage further out. Under correlated stress (ρ in [0.3, 0.5]) the resulting ceilings sit well below displayed TVL on both anchors; per-market figures in section 4. Method, code, curves and provenance are open-source.
 
 ---
 
@@ -37,7 +37,7 @@ Define, for a candidate PT market:
 - **V_liq(D, S, H)**: the volume of PT collateral that enters liquidation (soft → hard) over horizon **H** under stress scenario **S**, as a function of the market debt ceiling **D**. This depends on the LLAMMA band distribution of outstanding loans and on the price path implied by **S**.
 - **L_stress(σ_max, h(τ), ρ)**: the PT secondary liquidity realisable within an acceptable slippage bound **σ_max**, after:
   - a **maturity-bucketed haircut h(τ)** on realisable value (PT liquidity and price behaviour are a function of time-to-maturity τ, analogous to maturity-bucketed haircuts in the Basel collateral framework / FRTB liquidity horizons);
-  - a **wrong-way factor ρ ∈ (0,1]** contracting available depth in the stressed state, calibrated to the historical co-movement of underlying deviation and PT pool depth.
+  - a **wrong-way factor ρ ∈ (0,1]** contracting available depth in the stressed state. It is intended for calibration from the historical co-movement of underlying deviation and PT pool depth; in the included samples that channel is not observed strongly enough, so ρ is used as a disclosed sensitivity input.
 
 The debt-ceiling constraint:
 
@@ -51,11 +51,11 @@ This is a complement, not a replacement, to LlamaRisk's existing debt-ceiling me
 
 **The empirical takeaway (§4): execution capacity is regime-dependent in maturity.** Near maturity, Pendle's AMM concentrates liquidity around redemption value and exposes a hard proportion cap: capacity is a binary cliff, cheap below it and unavailable above it. Far from maturity, slippage is genuinely gradual and the σ_max bound binds well before any cap. A ceiling keyed to calm depth mis-sizes both regimes; once capacity is stress-contracted (ρ), D* sits well below both the pool's cap and what porting Aave-style hard-liquidation parameters would suggest, and the gap widens with maturity and thinness.
 
-## 4. Empirical results: two maturities, two regimes (Ethereum, 19 July 2026)
+## 4. Empirical results: two maturities, two regimes (Ethereum; market context 19 July, quote snapshots 20-21 July 2026)
 
 Both curves are Pendle-only (aggregator routing disabled), quoted PT to underlying across a size grid, slippage rebased to the marginal (smallest-trade) price; CSVs with full provenance (timestamp, addresses, routing mode) are in the repository.
 
-### 4.1 Near maturity: PT-sUSDe, matures 13-Aug-2026 (25 days, τ = 0.066 yr)
+### 4.1 Near maturity: PT-sUSDe, matures 13-Aug-2026 (24 days at the quote snapshot, τ = 0.0658 yr)
 
 Pool TVL $8.32M, implied yield 4.3%, spot 0.8042 sUSDe per PT. Across every size the AMM serves, slippage stays below 0.45%; a 2% threshold is never approached. The pool then refuses outright: quotes at 7.81M PT and above return `MarketProportionTooHigh`, with the largest served size at 7.29M PT (about $5.9M at spot). Execution capacity is a cliff, not a curve. One mechanical caveat: the proportion cap is enforced per transaction. A multi-block unwind can slice below it, but each slice moves the pool's implied rate, so per-trade capacity is the honest conservative measure of instantaneous absorption; cumulative capacity at a bounded discount (sequential quoting with state carry-over) is the planned v0.3 extension of the toolkit. In the June draft of this analysis the same market (then 66 days out, TVL $9.5M, aggregator routing enabled) showed the wall near $12.4M: part of that difference is routing, part is the pool's decline into maturity. Both readings make the same governance point: the cap moves with the pool, so it must be monitored, not assumed.
 
@@ -69,12 +69,12 @@ Running the identical stress calibration on both curves (3% underlying depeg, 1.
 
 | ρ (stressed depth retention) | D* PT-sUSDe, central (conservative) | D* PT-reUSD, central (conservative) |
 |---|---:|---:|
-| 0.5 | $1.72M ($0.96M) | $2.69M ($1.50M) |
-| 0.3 | $1.03M ($0.57M) | $1.62M ($0.90M) |
+| 0.5 | $4.00M ($2.23M) | $4.30M ($2.40M) |
+| 0.3 | $2.40M ($1.34M) | $2.58M ($1.44M) |
 
-Recommended anchoring ρ in [0.3, 0.5], consistent with liquidity contractions observed in past stablecoin-depeg episodes; per-market outputs and charts are in the repository.
+The interval ρ in [0.3, 0.5] is presented as an illustrative forward stress-sensitivity band, not as an empirically calibrated estimate from the included samples; per-market outputs and charts are in the repository.
 
-Three structural readings survive any ρ choice. First, both ceilings land well below pool TVL once stress contraction applies: displayed depth is not usable depth. Second, the near-maturity anchor's ceiling is governed by the proportion cap times ρ; the far anchor's by the slippage curve times ρ: same formula, different binding term, which is exactly why a single ported parameter set cannot serve both. Third, the depth-agnostic heuristic lands near the conservative band on one anchor and away from it on the other, for the wrong reasons in both cases: it captures neither the cap structure nor the contraction.
+Three structural readings survive any ρ choice. First, both ceilings land well below pool TVL once stress contraction applies: displayed depth is not usable depth. Second, the near-maturity anchor's ceiling is governed by the proportion cap times ρ; the far anchor's by the slippage curve times ρ: same formula, different binding term, which is exactly why a single ported parameter set cannot serve both. Third, the depth-agnostic heuristic happens to sit close to the central sUSDe result and between the central and conservative reUSD results. That numerical proximity is not structural: the heuristic captures neither the proportion cap nor stressed depth contraction.
 
 ## 5. Recommendation
 
@@ -82,7 +82,7 @@ For PT collateral in LlamaLend v2, set the per-market debt ceiling as **min( mat
 
 - **σ_max** (acceptable liquidation slippage) and **ρ** (wrong-way factor) published per underlying family;
 - **h(τ)** tightening as a function of remaining maturity;
-- **monitoring triggers**: in production, track distance-to-cap (the pool's proportion relative to its `MarketProportionTooHigh` bound), not just spot depth. The two dated measurements above show why: on the same sUSDe market, the wall moved materially in six weeks as the pool declined into maturity. Alert when underlying deviation crosses the band that historically coincides with capacity contraction: monitor stressed coverage continuously, not only at onboarding.
+- **monitoring triggers**: in production, track distance-to-cap (the pool's proportion relative to its `MarketProportionTooHigh` bound), not just spot depth. The two dated measurements above show why: on the same sUSDe market, the wall moved materially in six weeks as the pool declined into maturity. Where sufficient history supports calibration, alert when underlying deviation enters a band associated with capacity contraction. Until then, monitor underlying deviation and executable depth separately and recompute stressed coverage continuously, not only at onboarding.
 
 ## 6. Limitations and open questions
 
