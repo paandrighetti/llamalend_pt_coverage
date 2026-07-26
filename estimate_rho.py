@@ -18,8 +18,11 @@ INPUT  rho_inputs.csv columns:
     usde_price    USDe price in USD (~1.0 at peg)        [or provide usde_dev]
     capacity_usd  liquidity proxy (pool TVL / reserve), USD
 
-OUTPUT  rho_episode, rho_regression, a recommended rho, the worst observed depeg
-        (to calibrate run_analysis --depeg), and a co-movement chart.
+OUTPUT  rho_episode, rho_regression, a conservative candidate rho, the worst
+        observed depeg (to calibrate run_analysis --depeg), and a co-movement chart.
+
+The input price series must be the unstaked USDe token price. The sUSDe share
+price is yield-accreting and is not a valid peg-deviation series.
 
 No network. Verify the logic with:  python estimate_rho.py --synthetic
 """
@@ -63,6 +66,15 @@ def load(path: str) -> pd.DataFrame:
     df = df[df["capacity_usd"] > 0].reset_index(drop=True)
     if len(df) < 20:
         sys.exit("[estimate_rho] need >= 20 valid daily points.")
+
+    if "usde_price" in df.columns:
+        median_price = float(df["usde_price"].median())
+        if not 0.90 <= median_price <= 1.10:
+            sys.exit(
+                "[estimate_rho] usde_price does not look like unstaked USDe spot "
+                f"(median={median_price:.4f}). Check the token address; do not use "
+                "the yield-accreting sUSDe share price as a peg series."
+            )
     return df
 
 
@@ -153,7 +165,7 @@ def main() -> None:
         print("RECOMMENDED rho                : NOT CALIBRATABLE from a USDe depeg")
         print("  USDe held peg (<0.5%) across the sample, so the depeg-driven wrong-way")
         print("  channel is unobserved. Treat rho as a forward STRESS PARAMETER: present")
-        print("  D* across rho (dstar_vs_rho) and pick a conservative rho in [0.3, 0.5].")
+        print("  D* across rho and disclose the chosen forward sensitivity band.")
         print(f"  Context only: worst capacity drawdown was {rho_dd:.2f} (organic + stress mixed).")
     print("=" * 70)
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.2.4 (2026-07-26)
+
+- Corrected the DefiLlama price fetcher to use the unstaked USDe contract rather than the yield-accreting sUSDe share token.
+- Withdrew the retained rho input CSVs and charts because they did not constitute a valid USDe peg-deviation calibration dataset.
+- Kept rho as an explicit forward sensitivity and added a sanity check that rejects implausible USDe price levels.
+- Removed obsolete exploratory and comparison scripts containing environment-specific output paths.
+- Expanded repository-hygiene ignores and removed a UTF-8 byte-order mark from a test file.
+
 ## v0.2.3 (2026-07-26)
 
 - Reconciled the governance-post ceiling table with the current v0.2 engine and retained publication manifests.
