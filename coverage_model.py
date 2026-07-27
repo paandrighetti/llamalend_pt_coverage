@@ -248,7 +248,7 @@ def solve_debt_ceiling(
         frac = min(1.0, stress.collateral_shock / market.soft_liq_band_drop)
     if frac <= 0.0:
         return float("inf")  # no liquidation pressure under this (degenerate) stress
-    # V_liq(D) = (D / ltv) * frac ; set == l_stress and solve for D
+    # V_liq(D) = (D / ltv) * frac; set == l_stress and solve for D
     return l_stress * market.representative_ltv / frac
 
 
